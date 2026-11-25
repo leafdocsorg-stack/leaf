@@ -1,12 +1,50 @@
-// Builds the standalone Leaf Viewer into dist/: node tools/build-viewer.mjs
+// Builds the website into dist/: node tools/build-viewer.mjs
+//   dist/            landing page (site/)
+//   dist/spec/       the specification, rendered from spec/leaf-spec-0.1.md
+//   dist/app/        the Leaf Viewer
+//   dist/samples/    sample .leaf file
 import fs from 'node:fs'; import path from 'node:path';
+import { marked } from 'marked';
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const out = path.join(root, 'dist'); fs.rmSync(out, { recursive: true, force: true }); fs.mkdirSync(out);
+const out = path.join(root, 'dist'); fs.rmSync(out, { recursive: true, force: true });
+const mk = (...p) => { const d = path.join(out, ...p); fs.mkdirSync(d, { recursive: true }); return d; };
+mk();
+
+// Landing page and shared assets
+for (const f of ['index.html', 'style.css', 'favicon.svg']) fs.copyFileSync(path.join(root, 'site', f), path.join(out, f));
+
+// Viewer at /app/
+const app = mk('app');
 const core = fs.readFileSync(path.join(root, 'core/leaf-core.js'), 'utf8');
 const sample = fs.readFileSync(path.join(root, 'samples/lease-sample.leaf')).toString('base64');
 let html = fs.readFileSync(path.join(root, 'viewer/viewer.template.html'), 'utf8');
 html = html.replace('/*CORE*/', () => core).replace("'/*SAMPLE*/'", () => `'${sample}'`);
-fs.writeFileSync(path.join(out, 'index.html'), html);
-for (const f of ['pdf-tools.js', 'manifest.webmanifest', 'sw.js', 'icon.svg', 'icon-192.png', 'icon-512.png']) fs.copyFileSync(path.join(root, 'viewer', f), path.join(out, f));
-for (const f of fs.readdirSync(path.join(root, 'viewer/vendor'))) fs.copyFileSync(path.join(root, 'viewer/vendor', f), path.join(out, f));
-console.log('Built dist/ (' + fs.readdirSync(out).length + ' files). Serve it with any static host, e.g. npx serve dist');
+fs.writeFileSync(path.join(app, 'index.html'), html);
+for (const f of ['pdf-tools.js', 'manifest.webmanifest', 'sw.js', 'icon.svg', 'icon-192.png', 'icon-512.png']) fs.copyFileSync(path.join(root, 'viewer', f), path.join(app, f));
+for (const f of fs.readdirSync(path.join(root, 'viewer/vendor'))) fs.copyFileSync(path.join(root, 'viewer/vendor', f), path.join(app, f));
+
+// Spec at /spec/
+const md = fs.readFileSync(path.join(root, 'spec/leaf-spec-0.1.md'), 'utf8');
+const body = marked.parse(md);
+fs.writeFileSync(path.join(mk('spec'), 'index.html'), `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Leaf format specification v0.1 draft</title>
+<meta name="description" content="The Leaf (Living Editable Authenticated Format) specification, version 0.1 draft.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css">
+<link rel="canonical" href="https://leafdocs.org/spec/"></head><body>
+<header class="top"><div class="wrap"><a class="brand" href="/"><img src="/favicon.svg" alt="" width="26" height="26">Leaf</a>
+<nav><a href="/app/">Viewer</a><a href="/spec/">Spec</a><a href="https://github.com/leafdocsorg-stack/leaf">GitHub</a></nav></div></header>
+<main class="wrap doc">${body}
+<p><a href="/spec/leaf-spec-0.1.md">Download this spec as Markdown</a></p></main>
+<footer><div class="wrap"><span>Specification text: CC BY 4.0</span><span><a href="/">Home</a> · <a href="https://github.com/leafdocsorg-stack/leaf/issues">Give feedback</a></span></div></footer>
+</body></html>`);
+fs.copyFileSync(path.join(root, 'spec/leaf-spec-0.1.md'), path.join(out, 'spec', 'leaf-spec-0.1.md'));
+
+// Samples
+fs.copyFileSync(path.join(root, 'samples/lease-sample.leaf'), path.join(mk('samples'), 'lease-sample.leaf'));
+
+// Crawler files and headers
+fs.writeFileSync(path.join(out, 'robots.txt'), 'User-agent: *\nAllow: /\nSitemap: https://leafdocs.org/sitemap.xml\n');
+fs.writeFileSync(path.join(out, 'sitemap.xml'), '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>https://leafdocs.org/</loc></url>\n<url><loc>https://leafdocs.org/spec/</loc></url>\n<url><loc>https://leafdocs.org/app/</loc></url>\n</urlset>\n');
+fs.writeFileSync(path.join(out, '_headers'), '/samples/*\n  Content-Type: application/vnd.leaf+zip\n  Content-Disposition: attachment\n');
+console.log('Built dist/. Serve it with any static host, e.g. npx serve dist');
