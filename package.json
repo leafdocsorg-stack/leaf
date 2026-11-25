@@ -10,7 +10,8 @@
     "start": "npx --yes serve dist -l 8080"
   },
   "devDependencies": {
-    "jspdf": "^2.5.1"
+    "jspdf": "^2.5.1",
+    "marked": "^12.0.0"
   },
   "engines": { "node": ">=18" }
 }
