@@ -44,6 +44,7 @@ aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;po
 .tabs{display:flex;flex:none;border-bottom:1px solid var(--line);overflow-x:auto}
 .tabs button{border:0;border-radius:0;background:none;min-height:46px;flex:1 0 auto;color:var(--mute);border-bottom:2px solid transparent}
 .tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--acc);font-weight:600}
+.devtoggle{flex:none;display:flex;gap:8px;align-items:baseline;padding:10px 16px;border-top:1px solid var(--line);font-size:13px;color:var(--mute);cursor:pointer}.devtoggle span{font-size:12px;opacity:.8}.devtoggle input{margin:0;align-self:center}
 .pane{padding:16px;overflow:auto;min-height:0;flex:1 1 auto;font-size:14px}.pane[hidden]{display:none}
 .pane h3{font-size:14px;margin:0 0 6px}.pane p{margin:0 0 12px;color:var(--mute)}
 .part{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;width:100%;text-align:left;padding:8px 10px;border-radius:8px;min-height:44px;border:1px solid transparent;background:none;font-size:13px}
@@ -115,16 +116,16 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
   <section class="pages" id="pages" aria-label="Document pages"></section>
   <aside>
     <div class="tabs" role="tablist">
-      <button role="tab" aria-selected="true" data-tab="inside">Inside the file</button>
-      <button role="tab" aria-selected="false" data-tab="sign">Sign</button>
+      <button role="tab" aria-selected="true" data-tab="sign">Sign</button>
       <button role="tab" aria-selected="false" data-tab="history">History</button>
+      <button role="tab" aria-selected="false" data-tab="inside" class="dev-only" hidden>Inside the file</button>
     </div>
-    <div class="pane" id="tab-inside">
+    <div class="pane" id="tab-inside" hidden>
       <p>A Leaf file is a ZIP package. These are its parts, live: they update as you edit, fill or sign. Click one to see what it holds.</p>
       <div id="parts"></div>
       <pre id="partView" hidden></pre>
     </div>
-    <div class="pane" id="tab-sign" hidden>
+    <div class="pane" id="tab-sign">
       <h3>Seal this version and sign</h3>
       <p>Sealing freezes the current content, form answers and pages inside the file. Your signature covers that frozen version, so anyone can check later whether it was changed.</p>
       <label class="f" for="signer">Your name</label>
@@ -137,6 +138,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
       <p>Every change is appended to <code>history/changes.jsonl</code> inside the file.</p>
       <ul class="log" id="log"></ul>
     </div>
+    <label class="devtoggle"><input type="checkbox" id="devMode"> Developer mode <span>show the parts inside the file</span></label>
   </aside>
 </main>
 <main id="pdfMain" class="pdfm" hidden>
@@ -501,6 +503,18 @@ document.querySelectorAll('.tabs').forEach(t => t.addEventListener('click', e =>
   t.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', x === b));
   scope.querySelectorAll('.pane').forEach(p => { p.hidden = p.id !== 'tab-' + b.dataset.tab; });
 }));
+/* ---------- developer mode ---------- */
+(function(){
+  const box = document.getElementById('devMode'), tab = document.querySelector('[data-tab="inside"]');
+  const apply = on => {
+    box.checked = on; tab.hidden = !on;
+    if (!on && tab.getAttribute('aria-selected') === 'true') document.querySelector('[data-tab="sign"]').click();
+    try { localStorage.setItem('leafDev', on ? '1' : '0'); } catch (e) {}
+  };
+  let saved = false; try { saved = localStorage.getItem('leafDev') === '1'; } catch (e) {}
+  apply(saved || /[?&]dev\b/.test(location.search));
+  box.addEventListener('change', () => { apply(box.checked); if (box.checked) tab.click(); });
+})();
 window.LeafApp = { say, offer, setMode };
 
 /* ---------- start ---------- */
