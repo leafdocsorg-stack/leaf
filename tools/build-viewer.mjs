@@ -12,6 +12,7 @@ mk();
 
 // Landing page and shared assets
 for (const f of ['index.html', 'style.css', 'favicon.svg']) fs.copyFileSync(path.join(root, 'site', f), path.join(out, f));
+fs.copyFileSync(path.join(root, 'site/developers.html'), path.join(mk('developers'), 'index.html'));
 
 // Viewer at /app/
 const app = mk('app');
@@ -33,7 +34,7 @@ fs.writeFileSync(path.join(mk('spec'), 'index.html'), `<!doctype html>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css">
 <link rel="canonical" href="https://leafdocs.org/spec/"></head><body>
 <header class="top"><div class="wrap"><a class="brand" href="/"><img src="/favicon.svg" alt="" width="26" height="26">Leaf</a>
-<nav><a href="/app/">Viewer</a><a href="/spec/">Spec</a><a href="https://github.com/leafdocsorg-stack/leaf">GitHub</a></nav></div></header>
+<nav><a href="/app/">Edit a PDF</a><a href="/developers/">For developers</a><a href="/spec/">Spec</a><a href="https://github.com/leafdocsorg-stack/leaf">GitHub</a></nav></div></header>
 <main class="wrap doc">${body}
 <p><a href="/spec/leaf-spec-0.1.md">Download this spec as Markdown</a></p></main>
 <footer><div class="wrap"><span>Specification text: CC BY 4.0</span><span><a href="/">Home</a> · <a href="https://github.com/leafdocsorg-stack/leaf/issues">Give feedback</a></span></div></footer>
@@ -45,6 +46,6 @@ fs.copyFileSync(path.join(root, 'samples/lease-sample.leaf'), path.join(mk('samp
 
 // Crawler files and headers
 fs.writeFileSync(path.join(out, 'robots.txt'), 'User-agent: *\nAllow: /\nSitemap: https://leafdocs.org/sitemap.xml\n');
-fs.writeFileSync(path.join(out, 'sitemap.xml'), '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>https://leafdocs.org/</loc></url>\n<url><loc>https://leafdocs.org/spec/</loc></url>\n<url><loc>https://leafdocs.org/app/</loc></url>\n</urlset>\n');
+fs.writeFileSync(path.join(out, 'sitemap.xml'), '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>https://leafdocs.org/</loc></url>\n<url><loc>https://leafdocs.org/developers/</loc></url>\n<url><loc>https://leafdocs.org/spec/</loc></url>\n<url><loc>https://leafdocs.org/app/</loc></url>\n</urlset>\n');
 fs.writeFileSync(path.join(out, '_headers'), '/samples/*\n  Content-Type: application/vnd.leaf+zip\n  Content-Disposition: attachment\n');
 console.log('Built dist/. Serve it with any static host, e.g. npx serve dist');
