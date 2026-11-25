@@ -5,7 +5,7 @@
 {
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+if (window.pdfjsLib && !pdfjsLib.GlobalWorkerOptions.workerSrc) pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
 const say = t => window.LeafApp.say(t);
 
 let srcs = [], pages = [], annots = {}, fields = [], values = {}, tool = 'none', sigPng = null, sigSize = null;
@@ -767,5 +767,5 @@ $('#savePdfBtn').onclick = async () => {
   catch (err) { busy(''); say('Could not build the PDF: ' + err.message); }
 };
 
-window.PDFWS = { toBlocks, onTab: t => { closeEditor(true); if (t in TABTOOL) setTool(TABTOOL[t]); else if (tool === 'edit' || tool === 'redact') setTool('none'); }, open, build: () => build(pages), state: () => ({ pages, annots, values, fields, stamps }) };
+window.PDFWS = { name: () => fileName, toBlocks, onTab: t => { closeEditor(true); if (t in TABTOOL) setTool(TABTOOL[t]); else if (tool === 'edit' || tool === 'redact') setTool('none'); }, open, build: () => build(pages), state: () => ({ pages, annots, values, fields, stamps }) };
 }
