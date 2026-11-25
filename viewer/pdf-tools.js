@@ -153,7 +153,7 @@ function drawOverlay(uid) {
     if (a.t === 'img') { const r = R(a); return '<image href="' + a.png + '" x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" preserveAspectRatio="none"/>'; }
     if (a.t === 'redact') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="#000" fill-opacity=".55" stroke="#d11" stroke-width="1.5"/>'; }
     if (a.t === 'newfield') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="#0b5d63" fill-opacity=".08" stroke="#0b5d63" stroke-dasharray="4 3"/><text x="' + (r.x + 4) + '" y="' + (r.y - 4) + '" font-size="11" fill="#0b5d63" font-family="Inter,sans-serif">' + esc(a.ft + ': ' + a.name) + '</text>'; }
-    if (a.t === 'edit') { const r = R(editBox(a)), [bx, by] = V(a.x, a.by); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="' + a.bg + '"/><text x="' + bx + '" y="' + by + '" font-size="' + (a.size * vp.scale) + '" font-family=\'' + cssFam(a) + '\' font-weight="' + (a.bold ? 700 : 400) + '" font-style="' + (a.italic ? 'italic' : 'normal') + '" fill="' + a.fg + '" xml:space="preserve">' + esc(a.txt) + '</text>'; }
+    if (a.t === 'edit') { const r = R(editBox(a)), [bx, by] = V(a.x, a.by); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="' + a.bg + '"/><text x="' + bx + '" y="' + by + '" font-size="' + (a.size * vp.scale) + '" font-family=\'' + cssFam(a) + '\' font-weight="' + (a.bold ? 700 : 400) + '" font-style="' + (a.italic ? 'italic' : 'normal') + '" fill="' + a.fg + '"' + (a.wt ? ' stroke="' + a.fg + '" stroke-width="' + (a.wt * vp.scale) + '" stroke-linejoin="round"' : '') + ' xml:space="preserve">' + esc(a.txt) + '</text>'; }
     if (a.t === 'ul' || a.t === 'st') { const r = R(a), yy = a.t === 'ul' ? r.y + r.h : r.y + r.h / 2; return '<line x1="' + r.x + '" x2="' + (r.x + r.w) + '" y1="' + yy + '" y2="' + yy + '" stroke="' + (a.c || '#d11') + '" stroke-width="1.5"/>'; }
     if (a.t === 'rect') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="none" stroke="' + (a.c || '#0b5d63') + '" stroke-width="' + ((a.wd || 1.6) * vp.scale) + '"/>'; }
     if (a.t === 'ell') { const r = R(a); return '<ellipse cx="' + (r.x + r.w / 2) + '" cy="' + (r.y + r.h / 2) + '" rx="' + (r.w / 2) + '" ry="' + (r.h / 2) + '" fill="none" stroke="' + (a.c || '#0b5d63') + '" stroke-width="' + ((a.wd || 1.6) * vp.scale) + '"/>'; }
@@ -251,7 +251,23 @@ function sampleColors(uid, r) {
   const bgc = best.split(',').map(v => v * 16 + 8); let far = 0, fgc = [17, 17, 17];
   for (let i = 0; i < data.length; i += 4) { const dd = Math.abs(data[i] - bgc[0]) + Math.abs(data[i + 1] - bgc[1]) + Math.abs(data[i + 2] - bgc[2]); if (dd > far) { far = dd; fgc = [data[i], data[i + 1], data[i + 2]]; } }
   const hex = c => '#' + c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
-  return { bg: hex(bgc.map(v => v > 232 ? 255 : v)), fg: far > 90 ? hex(fgc) : '#111111' };
+  let ink = 0; if (far > 90) for (let i = 0; i < data.length; i += 4) ink += Math.min(1, (Math.abs(data[i] - bgc[0]) + Math.abs(data[i + 1] - bgc[1]) + Math.abs(data[i + 2] - bgc[2])) / far);
+  return { bg: hex(bgc.map(v => v > 232 ? 255 : v)), fg: far > 90 ? hex(fgc) : '#111111', ink: ink / W, k };
+}
+/* Match stroke weight: the replacement uses a standard font, which is often thinner than the original, so measure how much ink each has per unit of width and thicken the new text to match. */
+function fitWeight(a, cols) {
+  if (cols) { a.ink0 = cols.ink; a.k0 = cols.k; } a.wt = 0; if (!a.ink0 || !a.txt) return;
+  try {
+    const k = a.k0, px = a.size * k, c = document.createElement('canvas'), x = c.getContext('2d', { willReadFrequently: true });
+    const font = (a.italic ? 'italic ' : '') + (a.bold ? '700 ' : '400 ') + px + 'px ' + cssFam(a); x.font = font;
+    const w = Math.max(1, Math.ceil(x.measureText(a.txt).width)); c.width = w + 8; c.height = Math.ceil(px * 1.5);
+    x.font = font; x.fillStyle = a.bg; x.fillRect(0, 0, c.width, c.height); x.fillStyle = a.fg; x.textBaseline = 'alphabetic'; x.fillText(a.txt, 4, px * 1.1);
+    const d = x.getImageData(0, 0, c.width, c.height).data, hx = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)), B = hx(a.bg), F = hx(a.fg);
+    const far = Math.abs(F[0] - B[0]) + Math.abs(F[1] - B[1]) + Math.abs(F[2] - B[2]); if (far < 90) return;
+    let ink = 0; for (let i = 0; i < d.length; i += 4) ink += Math.min(1, (Math.abs(d[i] - B[0]) + Math.abs(d[i + 1] - B[1]) + Math.abs(d[i + 2] - B[2])) / far);
+    const mine = ink / w, ratio = a.ink0 / mine;
+    if (ratio > 1.14) a.wt = Math.min((ratio - 1.12) * 0.09 * a.size, 0.07 * a.size);
+  } catch (e) { a.wt = 0; }
 }
 let editor = null;
 const cssFam = a => a.fam === 'mono' ? '"Courier New",Courier,monospace' : a.fam === 'serif' ? '"Times New Roman",Times,serif' : 'Helvetica,Arial,sans-serif';
@@ -259,8 +275,8 @@ function closeEditor(commit) {
   if (!editor) return; const e = editor; editor = null; const val = e.input.value;
   e.input.onblur = null; e.input.remove();
   if (!commit) return;
-  if (e.ann) { if (val !== e.ann.txt) { snap(); e.ann.txt = val; drawOverlay(e.uid); } }
-  else if (val !== e.run.str) addAnn(e.uid, { t: 'edit', x: e.run.x, by: e.run.y, w: e.run.w, size: e.run.size, orig: e.run.str, txt: val, bg: e.cols.bg, fg: e.cols.fg, fam: e.run.fam, bold: e.run.bold, italic: e.run.italic });
+  if (e.ann) { if (val !== e.ann.txt) { snap(); e.ann.txt = val; fitWeight(e.ann); drawOverlay(e.uid); } }
+  else if (val !== e.run.str) { const na = { t: 'edit', x: e.run.x, by: e.run.y, w: e.run.w, size: e.run.size, orig: e.run.str, txt: val, bg: e.cols.bg, fg: e.cols.fg, fam: e.run.fam, bold: e.run.bold, italic: e.run.italic }; fitWeight(na, e.cols); addAnn(e.uid, na); }
 }
 async function startEdit(pt) {
   closeEditor(true);
@@ -556,7 +572,7 @@ async function build(list) {
       else if (a.t === 'rect') pg.drawRectangle({ x: a.x, y: a.y, width: a.w, height: a.h, borderColor: hexRgb(a.c || '#0b5d63'), borderWidth: a.wd || 1.4 });
       else if (a.t === 'edit') {
         const eb = editBox(a), f = await efont(a); pg.drawRectangle({ x: eb.x, y: eb.y, width: eb.w, height: eb.h, color: hexRgb(a.bg), borderWidth: 0 });
-        const t = safeText(f, a.txt); if (t) pg.drawText(t, { x: a.x, y: a.by, size: a.size, font: f, color: hexRgb(a.fg) });
+        const t = safeText(f, a.txt); if (t) { const fc = hexRgb(a.fg); if (a.wt) pg.pushOperators(PDFLib.pushGraphicsState(), PDFLib.setTextRenderingMode(PDFLib.TextRenderingMode.FillAndOutline), PDFLib.setLineWidth(a.wt), PDFLib.setStrokingColor(fc)); pg.drawText(t, { x: a.x, y: a.by, size: a.size, font: f, color: fc }); if (a.wt) pg.pushOperators(PDFLib.popGraphicsState()); }
       }
       else if (a.t === 'ink') for (let k = 1; k < a.pts.length; k++) pg.drawLine({ start: { x: a.pts[k - 1][0], y: a.pts[k - 1][1] }, end: { x: a.pts[k][0], y: a.pts[k][1] }, thickness: a.wd || 1.6, color: hexRgb(a.c || '#0b5d63') });
       else if (a.t === 'text') pg.drawText(a.txt, { x: a.x, y: a.y, size: a.s, font, color: hexRgb(a.c || '#111111') });
@@ -648,7 +664,7 @@ $('#frGo').onclick = async () => {
       if (!re.test(run.str)) { re.lastIndex = 0; continue; } re.lastIndex = 0;
       if (covered(p.uid, run)) continue;
       const txt = run.str.replace(re, () => { n++; return r; }), cols = sampleColors(p.uid, run);
-      (annots[p.uid] = annots[p.uid] || []).push({ id: 'a' + (++aidN), t: 'edit', x: run.x, by: run.y, w: run.w, size: run.size, orig: run.str, txt, bg: cols.bg, fg: cols.fg, fam: run.fam, bold: run.bold, italic: run.italic });
+      const na = { id: 'a' + (++aidN), t: 'edit', x: run.x, by: run.y, w: run.w, size: run.size, orig: run.str, txt, bg: cols.bg, fg: cols.fg, fam: run.fam, bold: run.bold, italic: run.italic }; fitWeight(na, cols); (annots[p.uid] = annots[p.uid] || []).push(na);
     }
     drawOverlay(p.uid);
   }
