@@ -34,7 +34,7 @@ main{display:grid;grid-template-columns:76px minmax(0,1fr) 360px;gap:20px;paddin
 .page svg{position:absolute;inset:0;width:100%;height:100%}
 .page text{font-family:Helvetica,Arial,sans-serif}
 .editing .page{cursor:text}.editing .page text.ed:hover{fill:#0b5d63}
-.ed-box{position:absolute;z-index:3;box-sizing:border-box;margin:0;background:#fff;color:#16191d;font-family:Helvetica,Arial,sans-serif;outline:2px solid #0b5d63;outline-offset:3px;white-space:pre-wrap;overflow-wrap:break-word;caret-color:#0b5d63;cursor:text}.ed-box b{font-weight:700}
+.ed-box{position:absolute;z-index:3;box-sizing:border-box;margin:0;background:#fff;color:#16191d;font-family:Helvetica,Arial,sans-serif;outline:0;box-shadow:inset 0 0 0 1.5px #0b5d63;white-space:pre-wrap;overflow-wrap:break-word;caret-color:#0b5d63;cursor:text}.ed-box b{font-weight:700}
 .fmtbar{display:flex;gap:8px;margin:0 0 14px}.fmtbar button{min-width:44px;justify-content:center}
 .hl{fill:rgba(11,93,99,.08);stroke:rgba(11,93,99,.5);stroke-dasharray:3 3}
 .fld{position:absolute;border:1px solid #9aa4ae;background:#f7fafc;border-radius:2px;font-family:Helvetica,Arial,sans-serif;color:#111;padding:0 .4em;margin:0}
@@ -85,7 +85,7 @@ dialog::backdrop{background:rgba(10,14,18,.45)}
 .ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .ppages:not([data-tool=none]) .ov{pointer-events:auto;cursor:crosshair;touch-action:none}
 .pnum{position:absolute;right:8px;bottom:-22px;font-size:12px;color:var(--mute)}
-.toolrow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}.toolrow button{justify-content:center}
+.toolrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}.toolrow button{justify-content:center}
 #sigPad{width:100%;height:auto;aspect-ratio:3/1;background:#fff;border:1px dashed var(--line);border-radius:8px;touch-action:none;cursor:crosshair;display:block}
 #sigPreview img{max-width:100%;max-height:80px;background:#fff;border-radius:6px;padding:4px;margin-top:8px}
 .ck{display:flex;gap:8px;align-items:flex-start;min-height:40px;padding:6px 0}.ck input{flex:none;width:16px;height:16px;margin:2px 0 0}
@@ -118,8 +118,8 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
   <div class="tools">
     <label class="btn" title="Open a .leaf or .pdf file">Open file<input type="file" id="fileIn" accept=".leaf,.lef,.zip,.pdf,application/pdf,application/zip"></label>
     <button id="editBtn" class="only-leaf" aria-pressed="false" style="display:none">Edit text</button>
-    <button id="saveBtn" class="only-leaf">Save .leaf</button>
-    <button id="pdfBtn" class="primary only-leaf">Export PDF</button>
+    <button id="saveBtn" class="primary only-leaf">Save</button>
+    <button id="pdfBtn" class="only-leaf">Save as PDF</button>
     <button id="savePdfBtn" class="primary only-pdf" hidden>Save PDF</button>
   </div>
 </header>
@@ -164,7 +164,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
         <li>In a table, press Tab to move to the next cell.</li>
         <li>Click outside the text, or press Esc, when you are done.</li>
       </ul>
-      <p class="note">Press Save .leaf at the top to keep your changes. Every edit is recorded in History. Editing a signed document breaks its signature, which is how tampering is detected.</p>
+      <p class="note">Press Save at the top to keep your changes. Every edit is recorded in History. Editing a signed document breaks its signature, which is how tampering is detected.</p>
     </div>
     <div class="pane" id="tab-insert" hidden>
       <h2>Insert</h2>
@@ -219,6 +219,11 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
       <h3>Edit text</h3>
       <p>Click any line of text on the page and type to change it. Press Enter to apply, Esc to cancel. Click an edited line again to change it further.</p>
       <p id="editHint" class="note"></p>
+      <h3 style="margin-top:14px">Find and replace</h3>
+      <label class="f" for="frFind">Find</label><input class="t" id="frFind" placeholder="Text to find">
+      <label class="f" for="frWith">Replace with</label><input class="t" id="frWith" placeholder="New text">
+      <div class="row"><button id="frGo">Replace all</button></div>
+      <p id="frResult" class="note"></p>
       <label class="ck"><input type="checkbox" id="pEditPerm"> Remove the original text completely (the edited pages become images, so text can no longer be selected or copied)</label>
       <p class="note">Edited text uses the closest standard font (Helvetica, Times or Courier) and matches the original size and colour. Scans have no editable text; use Convert first.</p>
       <div class="row"><button class="undoBtn">Undo last change</button></div>
@@ -231,12 +236,27 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
         <button data-tool="st" aria-pressed="false">Strikethrough</button>
         <button data-tool="ink" aria-pressed="false">Draw</button>
         <button data-tool="rect" aria-pressed="false">Box</button>
+        <button data-tool="ell" aria-pressed="false">Oval</button>
+        <button data-tool="line" aria-pressed="false">Line</button>
+        <button data-tool="arrow" aria-pressed="false">Arrow</button>
+        <button data-tool="note" aria-pressed="false">Note</button>
+        <button data-tool="link" aria-pressed="false">Link</button>
+        <button data-tool="stamp" aria-pressed="false">Stamp</button>
         <button data-tool="text" aria-pressed="false">Add text</button>
         <button data-tool="image" aria-pressed="false" onclick="if(!document.getElementById('imgName').textContent)document.getElementById('imgPick').click()">Add image</button>
       </div>
       <p id="toolHint" class="note"></p>
       <p class="note">Image: <span id="imgName"></span> <label class="btn" style="display:inline-flex;min-height:28px;padding:0 10px">Choose<input type="file" id="imgPick" accept="image/png,image/jpeg,image/webp"></label></p>
-      <label class="f" for="annText">Text to add</label>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:8px">
+        <div><label class="f" for="annColor">Colour</label><input type="color" id="annColor" value="#0b5d63" style="width:100%;height:36px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:2px"></div>
+        <div><label class="f" for="annWidth">Line</label><select class="t" id="annWidth"><option value="1">Thin</option><option value="1.6" selected>Medium</option><option value="3">Thick</option></select></div>
+        <div><label class="f" for="hlColor">Highlight</label><select class="t" id="hlColor"><option value="#ffd633">Yellow</option><option value="#7bdc6b">Green</option><option value="#ff8fb1">Pink</option><option value="#7fc8ff">Blue</option></select></div>
+      </div>
+      <label class="f" for="stampSel">Stamp</label>
+      <select class="t" id="stampSel"><option value="APPROVED|#1a7f3c">Approved</option><option value="REJECTED|#c0261d">Rejected</option><option value="DRAFT|#6b6f76">Draft</option><option value="CONFIDENTIAL|#c0261d">Confidential</option><option value="FINAL|#0b5d63">Final</option><option value="REVIEWED|#2a6fdb">Reviewed</option><option value="VOID|#c0261d">Void</option></select>
+      <label class="f" for="linkUrl">Link address (for the Link tool)</label>
+      <input class="t" id="linkUrl" placeholder="https://example.com">
+      <label class="f" for="annText">Text to add (also used for Notes)</label>
       <input class="t" id="annText" placeholder="e.g. Approved, see note">
       <label class="f" for="annSize">Text size</label>
       <select class="t" id="annSize"><option>9</option><option>10</option><option selected>12</option><option>14</option><option>18</option><option>24</option></select>
@@ -246,6 +266,18 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
       <p>Rotate, move or delete pages with the buttons under each page in the list. Tick pages to extract them.</p>
       <div class="row"><label class="btn">Add PDF (merge)<input type="file" id="addPdf" accept=".pdf,application/pdf"></label></div>
       <div class="row"><button id="extractBtn">Extract ticked pages</button><button id="splitBtn">Split in two</button></div>
+      <div class="row"><button id="blankPg">Insert blank page</button></div>
+      <p class="note">The blank page goes after the last ticked page, or at the end.</p>
+      <h3 style="margin-top:18px">Crop pages</h3>
+      <p>Trim margins in points (72 = one inch). Applies to ticked pages, or all pages if none are ticked. Leave all at 0 to clear.</p>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">
+        <div><label class="f" for="cropL">Left</label><input class="t" id="cropL" type="number" min="0" value="0"></div>
+        <div><label class="f" for="cropR">Right</label><input class="t" id="cropR" type="number" min="0" value="0"></div>
+        <div><label class="f" for="cropT">Top</label><input class="t" id="cropT" type="number" min="0" value="0"></div>
+        <div><label class="f" for="cropB">Bottom</label><input class="t" id="cropB" type="number" min="0" value="0"></div>
+      </div>
+      <div class="row"><button id="cropApply">Apply crop</button></div>
+      <p id="cropNote" class="note"></p>
     </div>
     <div class="pane" id="tab-form" hidden>
       <p>Fill the PDF's own form fields. Values are written into the file when you save.</p>
@@ -278,7 +310,13 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
       <p id="redactHint" class="note"></p>
     </div>
     <div class="pane" id="tab-pstamp" hidden>
-      <h3>Watermark</h3>
+      <h3>Header and footer</h3>
+      <p>Text printed on every page. Use {n} for the page number, {total} for the page count and {date} for today's date.</p>
+      <label class="f">Header: left, centre, right</label>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px"><input class="t" id="hfL" aria-label="Header left"><input class="t" id="hfC" aria-label="Header centre"><input class="t" id="hfR" aria-label="Header right"></div>
+      <label class="f" style="margin-top:8px">Footer: left, centre, right</label>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px"><input class="t" id="ffL" aria-label="Footer left"><input class="t" id="ffC" aria-label="Footer centre"><input class="t" id="ffR" aria-label="Footer right"></div>
+      <h3 style="margin-top:18px">Watermark</h3>
       <label class="f" for="wmText">Watermark text</label>
       <input class="t" id="wmText" placeholder="e.g. CONFIDENTIAL">
       <label class="f" for="wmOpacity">Strength</label>
@@ -303,6 +341,13 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
       <input class="t" id="pwSet" type="password" autocomplete="new-password" placeholder="Leave empty for no password">
       <p class="note">Encrypted with AES-256. Opening a protected PDF here asks for its password and removes it from your working copy.</p>
 
+      <h3 style="margin-top:18px">Permissions</h3>
+      <p>Restrict what readers can do. Applied with the password, or on their own if no password is set.</p>
+      <label class="ck"><input type="checkbox" id="permPrint" checked> Allow printing</label>
+      <label class="ck"><input type="checkbox" id="permCopy" checked> Allow copying text and images</label>
+      <label class="ck"><input type="checkbox" id="permEdit" checked> Allow editing</label>
+      <h3 style="margin-top:18px">File size</h3>
+      <label class="ck"><input type="checkbox" id="compress"> Optimise file size when saving (lossless)</label>
       <h3 style="margin-top:18px">Document info</h3>
       <label class="f" for="infoTitle">Title</label><input class="t" id="infoTitle" placeholder="Leave empty to keep">
       <label class="f" for="infoAuthor">Author</label><input class="t" id="infoAuthor" placeholder="Leave empty to keep">
@@ -314,6 +359,9 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
       <div class="row"><button id="ocrBtn">Recognize text</button></div>
       <p id="ocrResult" class="note"></p>
       
+      <h3 style="margin-top:18px">Create PDF from images</h3>
+      <p>Adds one or more pictures (PNG, JPG, WebP) as new pages at the end.</p>
+      <div class="row"><label class="btn">Choose images<input type="file" id="imgToPdf" accept="image/png,image/jpeg,image/webp" multiple></label></div>
       <h3 style="margin-top:18px">Export pages as images</h3>
       <p>Saves each page as a PNG picture (a single zip if there are several).</p>
       <div class="row"><button id="exportPng">Export images</button></div>
