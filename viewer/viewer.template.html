@@ -121,6 +121,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
     <label class="btn" title="Open a different PDF or Leaf file">Open another<input type="file" id="fileIn" accept=".leaf,.lef,.zip,.pdf,application/pdf,application/zip"></label>
     <button id="editBtn" class="only-leaf" aria-pressed="false" style="display:none">Edit text</button>
     <button id="saveBtn" class="primary only-leaf">Save</button>
+    <button id="htmlBtn" class="only-leaf" title="Save one file that opens in any browser with a double-click, no install needed">Save as web page</button>
     <button id="pdfBtn" class="only-leaf">Save as PDF</button>
     <button id="savePdfBtn" class="primary only-pdf" hidden>Download PDF</button>
     <button id="leafBtn" class="only-pdf" hidden title="Turn the text of this PDF into an editable Leaf document (images and exact layout are not carried over)">Save as Leaf</button>
@@ -709,7 +710,7 @@ async function openFile(f, handle) {
   fileHandle = handle || null;
   try {
     const u = new Uint8Array(await f.arrayBuffer());
-    if (u[0] === 0x25 && u[1] === 0x50 && u[2] === 0x44 && u[3] === 0x46) { if (!(await window.PDFWS.open(u, f.name))) return; setStatus([['good', 'Editing ' + f.name + ' in your browser. Nothing was uploaded.']]); return; }
+    if (u[0] === 0x25 && u[1] === 0x50 && u[2] === 0x44 && u[3] === 0x46) { if (!window.PDFWS) { say('PDF editing is in the full editor at leafdocs.org/app.'); return; } if (!(await window.PDFWS.open(u, f.name))) return; setStatus([['good', 'Editing ' + f.name + ' in your browser. Nothing was uploaded.']]); return; }
     setMode('leaf'); await load(u, 'Opened ' + f.name + ' from your device. Nothing was uploaded.');
   } catch (err) { say('Could not open that file: ' + err.message); }
 }
@@ -728,7 +729,7 @@ document.addEventListener('drop', e => { e.preventDefault(); document.body.class
 const slug = () => st.doc.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'document';
 async function offer(filename, data) {
   if (!downloads) {
-    const url = URL.createObjectURL(new Blob([data], { type: /\.pdf$/i.test(filename) ? 'application/pdf' : /\.(md|txt)$/i.test(filename) ? 'text/plain' : /\.png$/i.test(filename) ? 'image/png' : /\.zip$/i.test(filename) && !/\.leaf\.zip$/i.test(filename) ? 'application/zip' : 'application/vnd.leaf+zip' }));
+    const url = URL.createObjectURL(new Blob([data], { type: /\.html$/i.test(filename) ? 'text/html' : /\.pdf$/i.test(filename) ? 'application/pdf' : /\.(md|txt)$/i.test(filename) ? 'text/plain' : /\.png$/i.test(filename) ? 'image/png' : /\.zip$/i.test(filename) && !/\.leaf\.zip$/i.test(filename) ? 'application/zip' : 'application/vnd.leaf+zip' }));
     const a = Object.assign(document.createElement('a'), { href: url, download: filename });
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); return;
   }
@@ -743,6 +744,18 @@ $('#saveBtn').onclick = async () => {
     catch (err) { if (err && err.name === 'AbortError') return; }
   }
   await offer(slug() + (downloads ? '.leaf.zip' : '.leaf'), p.bytes);
+};
+/* One-file web page: the reader plus the document, so it opens in any browser with no install. */
+const READER = !!document.getElementById('leafdata');
+const toB64 = u8 => { let t = ''; for (let i = 0; i < u8.length; i += 0x8000) t += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(t); };
+async function webPage(bytes) {
+  const tpl = READER ? window.__LEAF_READER_SRC : await fetch('reader.html', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('reader unavailable'); return r.text(); });
+  if (!tpl) throw new Error('reader unavailable');
+  return tpl.replace(/(<script type="text\/plain" id="leafdata">)[\s\S]*?(<\/script>)/, (m, a, b) => a + toB64(bytes) + b);
+}
+$('#htmlBtn').onclick = async () => {
+  try { await commitEdit(); const p = await Leaf.pack(st); const html = await webPage(p.bytes); await offer(slug() + '.leaf.html', new TextEncoder().encode(html)); }
+  catch (err) { say('Could not build the web page: ' + (err.message || err)); }
 };
 $('#pdfBtn').onclick = async () => {
   await commitEdit();
@@ -883,6 +896,11 @@ addEventListener('appinstalled', () => { $('#installBox').hidden = true; install
 $('#installBtn').onclick = async () => { if (!installEvt) return; installEvt.prompt(); const r = await installEvt.userChoice; if (r.outcome === 'accepted') $('#installBox').hidden = true; installEvt = null; };
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 setMode('start');
+if (READER) {
+  const pure = $('#saveBtn').onclick; $('#saveBtn').onclick = $('#htmlBtn').onclick; $('#htmlBtn').textContent = 'Save as .leaf'; $('#htmlBtn').title = 'Save the plain Leaf file'; $('#htmlBtn').onclick = pure;
+  const raw = document.getElementById('leafdata').textContent.trim();
+  if (raw) { setMode('leaf'); load(Uint8Array.from(atob(raw), c => c.charCodeAt(0)), 'Opened from this web page. Nothing was uploaded.').catch(err => { setMode('start'); say('Could not open the document: ' + err.message); }); }
+}
 if (window.claude && claude.use) claude.use('downloads').then(d => { downloads = d; }).catch(() => {});
 }
 </script>
