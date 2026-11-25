@@ -104,6 +104,8 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
 .start .row{justify-content:center}.start .huge{min-height:56px;padding:0 28px;font-size:17px;border-radius:12px}.start .alt{margin:18px 0 0;font-size:14px}.linkbtn{border:0;background:none;min-height:0;padding:0;color:var(--acc);text-decoration:underline;font-size:14px}.rail.simple .adv{display:none}body[data-mode=leaf]:not(.dev) .chip:not(.warn):not(.bad){display:none}.rail .morebtn svg{width:24px;height:24px}details.more{margin:6px 0 14px;border-top:1px solid var(--line);padding-top:10px}details.more>summary{cursor:pointer;font-weight:600;color:var(--acc);min-height:32px;display:flex;align-items:center}details.more[open]>summary{margin-bottom:8px}.opt[hidden]{display:none}.sw{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 12px}.sw button{width:34px;height:34px;min-height:0;padding:0;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line)}.sw button[aria-pressed=true]{box-shadow:0 0 0 2px var(--acc)}.seg{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 12px}.seg button{min-height:36px;padding:0 12px}.start .big{min-height:48px;padding:0 22px;font-size:15px}
 .start .dz{border:1.5px dashed var(--line);border-radius:14px;padding:34px 20px;background:var(--panel)}
 .insgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.insgrid button{min-height:40px}
+.sheetClose{display:none;justify-content:flex-end;position:sticky;top:0;z-index:2;background:var(--panel);padding:8px 10px 0}
+@media(max-width:760px){header .homelink,header .rec,header .tools label.btn:has(#fileIn){display:none!important}header{gap:8px!important;padding:8px 12px!important}header .tools{gap:6px!important}header .tools button,header .tools label.btn{min-height:36px;padding:0 12px;font-size:14px}.doc-title{font-size:14px}main .rail{position:fixed!important;left:0;right:0;bottom:0;top:auto;z-index:40;margin:0;border-radius:0;border-width:1px 0 0;max-height:none;flex-direction:row;overflow-x:auto;padding:4px 4px calc(4px + env(safe-area-inset-bottom));background:var(--panel);box-shadow:0 -4px 16px rgba(0,0,0,.08)}main .rail button{flex:1 0 64px}main .rail .devtoggle{display:none}main>aside{position:fixed!important;left:0;right:0;top:auto;bottom:calc(66px + env(safe-area-inset-bottom));z-index:39;max-height:46vh!important;overflow:auto;margin:0;border-radius:16px 16px 0 0;box-shadow:0 -10px 28px rgba(0,0,0,.16)}body:not(.sheet) main>aside{display:none}main,.pdfm{padding-bottom:90px}body:not(.pgtab) .pdfm .thumbs{display:none}.sheetClose{display:flex}}
 @media(prefers-reduced-motion:no-preference){.page{transition:box-shadow .2s}}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
@@ -153,6 +155,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
   </nav>
   <section class="pages" id="pages" aria-label="Document pages"></section>
   <aside>
+    <div class="sheetClose"><button type="button" class="sheetDone">Done</button></div>
     <div class="pane" id="tab-sign">
       <h2>Fill &amp; sign</h2>
       <p class="lead">Complete the document, then sign it so nobody can change it unnoticed.</p>
@@ -223,6 +226,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
   <nav class="thumbs" aria-label="Page list"><div class="thead"><b id="pgCount"></b><button id="selAll">Select all</button></div><div id="pdfThumbs"></div></nav>
   <section class="ppages" id="pdfPages" data-tool="none" aria-label="PDF pages"></section>
   <aside>
+    <div class="sheetClose"><button type="button" class="sheetDone">Done</button></div>
     <div class="pane" id="tab-pedit">
       <h3>Edit text</h3>
       <p>Click any line of text on the page and type to change it. Press Enter when done.</p>
@@ -762,20 +766,47 @@ $('#saveBtn').onclick = async () => {
 /* One-file web page: the reader plus the document, so it opens in any browser with no install. */
 const READER = !!document.getElementById('leafdata');
 const toB64 = u8 => { let t = ''; for (let i = 0; i < u8.length; i += 0x8000) t += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(t); };
-async function webPage(bytes, kind) {
+/* A static copy of the document for previews that cannot run scripts (phone file viewers). */
+const escH = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const mdH = s => escH(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+function staticLeaf(s) {
+  const o = [], blank = '<span style="display:inline-block;min-width:160px;border-bottom:1px solid #9aa4ae">&nbsp;</span>';
+  for (const b of s.doc.blocks || []) {
+    if (b.type === 'heading') { const l = Math.min(6, b.level || 1); o.push('<h' + l + ' style="margin:18px 0 8px">' + mdH(b.text) + '</h' + l + '>'); }
+    else if (b.type === 'paragraph') o.push('<p style="margin:0 0 10px' + (b.style === 'small' ? ';font-size:12px;color:#555' : '') + '">' + (Array.isArray(b.text) ? b.text.map(r => r.b ? '<b>' + escH(r.t) + '</b>' : escH(r.t)).join('') : mdH(b.text)) + '</p>');
+    else if (b.type === 'list') o.push('<ul style="margin:0 0 10px;padding-left:20px">' + (b.items || []).map(i => '<li>' + mdH(i) + '</li>').join('') + '</ul>');
+    else if (b.type === 'table') o.push('<table style="width:100%;border-collapse:collapse;margin:0 0 12px;font-size:14px">' + (b.rows || []).map((r, i) => '<tr>' + r.map(c => (b.header && !i ? '<th' : '<td') + ' style="text-align:left;padding:6px;border-bottom:1px solid #e3e7e8">' + mdH(c) + (b.header && !i ? '</th>' : '</td>')).join('') + '</tr>').join('') + '</table>');
+    else if (b.type === 'fields') o.push((b.fields || []).map(f => '<p style="margin:0 0 10px"><span style="font-size:11px;font-weight:700;color:#555">' + escH(f.label) + '</span><br>' + (s.values[f.name] != null && s.values[f.name] !== '' ? escH(f.ft === 'checkbox' ? (s.values[f.name] ? 'Yes' : 'No') : s.values[f.name]) : blank) + '</p>').join(''));
+    else if (b.type === 'signature') o.push('<p style="margin:14px 0 10px"><span style="font-size:11px;font-weight:700;color:#555">' + escH(b.label) + '</span><br>' + (s.values[b.name] ? escH(s.values[b.name]) : blank) + '</p>');
+  }
+  if ((s.signatures || []).length) o.push('<p style="margin:16px 0 0;font-size:13px;color:#0b5d63">Signed by ' + s.signatures.map(g => escH(g.payload && g.payload.signer)).join(', ') + '</p>');
+  return '<div style="background:#fff;padding:28px 24px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.12)">' + o.join('') + '</div>';
+}
+async function staticPdf(bytes) {
+  if (!window.pdfjsLib) return '';
+  const d = await pdfjsLib.getDocument({ data: bytes.slice() }).promise, out = [];
+  for (let i = 1; i <= Math.min(d.numPages, 40); i++) {
+    const pg = await d.getPage(i), vp = pg.getViewport({ scale: 1.4 }), c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); await pg.render({ canvasContext: x, viewport: vp }).promise;
+    out.push('<img alt="Page ' + i + '" src="' + c.toDataURL('image/jpeg', 0.72) + '" style="display:block;width:100%;height:auto;margin:0 0 12px;box-shadow:0 1px 4px rgba(0,0,0,.15)">');
+  }
+  return out.join('');
+}
+async function webPage(bytes, kind, preview) {
   const tpl = READER ? window.__LEAF_READER_SRC : await fetch(kind === 'pdf' ? 'reader-pdf.html' : 'reader.html', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('reader unavailable'); return r.text(); });
   if (!tpl) throw new Error('reader unavailable');
-  return tpl.replace(/(<script type="text\/plain" id="leafdata">)[\s\S]*?(<\/script>)/, (m, a, b) => a + toB64(bytes) + b);
+  return tpl.replace(/(<script type="text\/plain" id="leafdata">)[\s\S]*?(<\/script>)/, (m, a, b) => a + toB64(bytes) + b)
+    .replace(/(<div id="nojsDoc">)[\s\S]*?(<\/div><!--\/nojsDoc-->)/, (m, a, b) => a + (preview || '') + b);
 }
 const savedMsg = name => matchMedia('(pointer: coarse)').matches
   ? 'Saved "' + name + '" to your Downloads.\n\nTo open it on a phone, go to leafdocs.org/app, tap Open a file and choose it. On a computer, just double-click it. You can send it to anyone, with nothing to install.'
   : 'Saved "' + name + '" (usually in your Downloads folder).\n\nDouble-click it to open it in your web browser. You can also email or send it to anyone. On a phone, they open leafdocs.org/app and tap Open a file.';
-async function saveWebPage(bytes, name, kind) {
-  const html = await webPage(bytes, kind); await offer(name, new TextEncoder().encode(html)); if (!downloads) say(savedMsg(name));
+async function saveWebPage(bytes, name, kind, preview) {
+  const html = await webPage(bytes, kind, preview); await offer(name, new TextEncoder().encode(html)); if (!downloads) say(savedMsg(name));
 }
 const savePure = async () => { await commitEdit(); const p = await Leaf.pack(st); await offer(slug() + '.leaf', p.bytes); };
 const saveMain = async () => {
-  try { await commitEdit(); const p = await Leaf.pack(st); await saveWebPage(p.bytes, slug() + '.leaf.html'); }
+  try { await commitEdit(); const p = await Leaf.pack(st); await saveWebPage(p.bytes, slug() + '.leaf.html', null, staticLeaf(st)); }
   catch (err) { say('Could not save: ' + (err.message || err)); }
 };
 $('#htmlBtn').onclick = savePure;
@@ -813,10 +844,12 @@ document.querySelectorAll('.rail').forEach(r => {
   b.onclick = () => { const simple = r.classList.toggle('simple'); b.querySelector('span').textContent = simple ? 'More tools' : 'Fewer tools'; };
   r.insertBefore(b, r.querySelector('.devtoggle'));
 });
+document.addEventListener('click', e => { if (e.target.closest('.sheetDone')) document.body.classList.remove('sheet', 'pgtab'); });
 const optSync = () => { const on = document.querySelector('#tab-annot [data-tool][aria-pressed=true]'), t = on ? on.dataset.tool : 'none'; document.querySelectorAll('#tab-annot .opt').forEach(o => { o.hidden = !(o.dataset.for || '').split(' ').includes(t); }); document.querySelectorAll('#tab-annot .opt [data-for]').forEach(o => { o.hidden = !o.dataset.for.split(' ').includes(t); }); };
 document.addEventListener('click', e => { if (e.target.closest('#tab-annot')) setTimeout(optSync, 0); }); optSync();
 document.querySelectorAll('.rail').forEach(t => t.addEventListener('click', e => {
   const b = e.target.closest('[data-tab]'); if (!b) return; const scope = t.closest('main');
+  if (e.isTrusted && matchMedia('(max-width: 760px)').matches) { const again = b.getAttribute('aria-selected') === 'true' && document.body.classList.contains('sheet'); document.body.classList.toggle('sheet', !again); document.body.classList.toggle('pgtab', b.dataset.tab === 'pgs' && !again); }
   t.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-selected', x === b));
   scope.querySelectorAll('.pane').forEach(p => { p.hidden = p.id !== 'tab-' + b.dataset.tab; });
   if (scope.id === 'pdfMain' && window.PDFWS) PDFWS.onTab(b.dataset.tab);
@@ -844,7 +877,8 @@ $('#leafBtn').onclick = async () => {
     s0.created = (leafSrc && leafSrc.created) || now(); s0.modified = now(); s0.source = pdf;
     st = s0; await relayout(); const p = await Leaf.pack(st); st = prev;
     const name = t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'document';
-    await saveWebPage(p.bytes, name + '.leaf.html', 'pdf');
+    let preview = ''; try { preview = await staticPdf(pdf); } catch (e) {}
+    await saveWebPage(p.bytes, name + '.leaf.html', 'pdf', preview);
   } catch (err) { say('Could not save: ' + (err.message || err)); }
 };
 $('#newDocBtn').onclick = () => newDoc().catch(err => say('Could not create the document: ' + err.message));
