@@ -1,0 +1,16 @@
+{
+  "name": "leaf-format",
+  "version": "0.1.0",
+  "description": "Leaf (Living Editable Authenticated Format): an open document format to replace PDF, with a free browser viewer and PDF toolkit.",
+  "license": "SEE LICENSE IN README.md",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build-viewer.mjs",
+    "sample": "node tools/build-sample.mjs",
+    "start": "npx --yes serve dist -l 8080"
+  },
+  "devDependencies": {
+    "jspdf": "^2.5.1"
+  },
+  "engines": { "node": ">=18" }
+}
