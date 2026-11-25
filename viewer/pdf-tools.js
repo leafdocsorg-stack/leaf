@@ -269,14 +269,68 @@ function fitWeight(a, cols) {
     if (ratio > 1.14) a.wt = Math.min((ratio - 1.12) * 0.09 * a.size, 0.07 * a.size);
   } catch (e) { a.wt = 0; }
 }
+/* Convert the PDF's text (with your edits and added text) into Leaf blocks: headings, paragraphs and lists. Images and exact layout are not carried over. */
+async function toBlocks() {
+  const lines = []; let sizes = [];
+  for (const p of pages) {
+    const runs = (await runsFor(p.uid)).map(r => ({ ...r })), an = annots[p.uid] || [];
+    for (const r of runs) { const e = an.find(a => a.t === 'edit' && Math.abs(a.x - r.x) < 1.5 && Math.abs(a.by - r.y) < 1.5); if (e) r.str = e.txt; }
+    for (const a of an) if (a.t === 'text') runs.push({ x: a.x, y: a.y, size: a.s, str: a.txt, w: 1 });
+    runs.sort((a, b) => b.y - a.y || a.x - b.x);
+    const pl = [];
+    for (const r of runs) {
+      const l = pl[pl.length - 1];
+      if (l && Math.abs(l.y - r.y) < 0.4 * Math.max(l.size, r.size)) { l.str += (l.str.endsWith(' ') || r.str.startsWith(' ') ? '' : ' ') + r.str; l.size = Math.max(l.size, r.size); }
+      else pl.push({ y: r.y, size: r.size, str: r.str, x: r.x, page: p.uid });
+    }
+    for (const l of pl) { l.str = l.str.replace(/\s+/g, ' ').trim(); if (l.str) { lines.push(l); sizes.push(l.size); } }
+  }
+  sizes.sort((a, b) => a - b); const med = sizes[Math.floor(sizes.length / 2)] || 11;
+  const blocks = []; let n = 0, cur = null; const id = () => 'b' + (++n);
+  const flush = () => { if (cur) { blocks.push({ id: id(), type: 'paragraph', text: [{ t: cur.txt }] }); cur = null; } };
+  let list = null; const flushList = () => { if (list) { blocks.push({ id: id(), type: 'list', items: list }); list = null; } };
+  let prev = null;
+  for (const l of lines) {
+    const bullet = /^([•·▪◦*–-]|\d{1,2}[.)])\s+/.test(l.str);
+    const heading = l.size >= med * 1.25 && l.str.length < 120;
+    const gap = prev && prev.page === l.page ? prev.y - l.y : 999;
+    if (heading) { flush(); flushList(); blocks.push({ id: id(), type: 'heading', level: l.size >= med * 1.7 ? 1 : 2, text: l.str }); }
+    else if (bullet) { flush(); (list = list || []).push(l.str.replace(/^([•·▪◦*–-]|\d{1,2}[.)])\s+/, '')); }
+    else if (list && gap < med * 1.6 && l.x > 1) { list[list.length - 1] += ' ' + l.str; }
+    else {
+      flushList();
+      if (cur && gap < med * 1.7 && prev && Math.abs(prev.size - l.size) < 0.2 * med) cur.txt = cur.txt.replace(/([a-z])-$/, '$1') + (/[a-z]-$/.test(cur.txt) ? '' : ' ') + l.str;
+      else { flush(); cur = { txt: l.str }; }
+    }
+    prev = l;
+  }
+  flush(); flushList();
+  const first = blocks.find(b => b.type === 'heading');
+  return { title: (first && first.text) || (fileName || 'document').replace(/\.pdf$/i, ''), blocks };
+}
 let editor = null;
 const cssFam = a => a.fam === 'mono' ? '"Courier New",Courier,monospace' : a.fam === 'serif' ? '"Times New Roman",Times,serif' : 'Helvetica,Arial,sans-serif';
 function closeEditor(commit) {
   if (!editor) return; const e = editor; editor = null; const val = e.input.value;
   e.input.onblur = null; e.input.remove();
   if (!commit) return;
+  if (e.add) { if (!val.trim()) return; addAnn(e.uid, e.add.kind === 'note' ? { t: 'note', x: e.add.x, y: e.add.y, txt: val.trim() } : { t: 'text', x: e.add.x, y: e.add.y, s: e.add.s, txt: val }); return; }
   if (e.ann) { if (val !== e.ann.txt) { snap(); e.ann.txt = val; fitWeight(e.ann); drawOverlay(e.uid); } }
   else if (val !== e.run.str) { const na = { t: 'edit', x: e.run.x, by: e.run.y, w: e.run.w, size: e.run.size, orig: e.run.str, txt: val, bg: e.cols.bg, fg: e.cols.fg, fam: e.run.fam, bold: e.run.bold, italic: e.run.italic }; fitWeight(na, e.cols); addAnn(e.uid, na); }
+}
+function addInline(pt, kind) {
+  closeEditor(true);
+  const uid = pt.uid, vp = vps[uid], host = document.querySelector('.ppage[data-uid="' + uid + '"]'), hr = host.getBoundingClientRect(), k = hr.width / vp.width;
+  const s = kind === 'note' ? 11 : (+$('#annSize').value || 12), col = kind === 'note' ? '#6b5300' : $('#annColor').value, [vx, vy] = vp.convertToViewportPoint(pt.x, pt.y);
+  const input = document.createElement('input'); input.className = 'pedit'; input.type = 'text'; input.spellcheck = false; input.placeholder = kind === 'note' ? 'Type a note' : 'Type here';
+  const fs = s * vp.scale * k;
+  Object.assign(input.style, { left: vx * k - 2 + 'px', top: vy * k - fs * 1.05 + 'px', height: fs * 1.4 + 'px', width: '180px', fontSize: fs + 'px', fontFamily: 'Helvetica,Arial,sans-serif', color: col, background: kind === 'note' ? '#fff3b0' : 'rgba(255,255,255,.85)' });
+  host.appendChild(input);
+  const meas = document.createElement('canvas').getContext('2d'); const fit = () => { meas.font = fs + 'px Helvetica,Arial,sans-serif'; input.style.width = Math.max(120, meas.measureText(input.value).width + 24) + 'px'; };
+  input.oninput = fit;
+  input.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); closeEditor(true); } else if (ev.key === 'Escape') { ev.preventDefault(); closeEditor(false); } ev.stopPropagation(); };
+  input.onblur = () => closeEditor(true);
+  editor = { input, uid, add: { kind, x: pt.x, y: pt.y, s } }; setTimeout(() => input.focus(), 30);
 }
 async function startEdit(pt) {
   closeEditor(true);
@@ -334,17 +388,13 @@ $('#pdfPages').addEventListener('pointerdown', e => {
     if (!insPng) { say('Choose an image first.'); return; }
     const w = Math.min(220, insSize.w), h = w * insSize.h / insSize.w;
     addAnn(pt.uid, { t: 'img', x: pt.x - w / 2, y: pt.y - h / 2, w, h, png: insPng });
-  } else if (tool === 'note') {
-    const txt = $('#annText').value.trim(); if (!txt) { $('#annText').focus(); say('Type the note text first, then click on the page.'); return; }
-    addAnn(pt.uid, { t: 'note', x: pt.x, y: pt.y, txt });
-  } else if (tool === 'stamp') {
+  } else if (tool === 'note') addInline(pt, 'note');
+  else if (tool === 'stamp') {
     const [label, c] = $('#stampSel').value.split('|'), fs = 22, cx = document.createElement('canvas').getContext('2d'); cx.font = 'bold ' + fs + 'px Helvetica,Arial,sans-serif';
     const w = cx.measureText(label).width + 26, h = fs + 18; addAnn(pt.uid, { t: 'stamp', x: pt.x - w / 2, y: pt.y - h / 2, w, h, label, c, fs });
   } else if (tool === 'ink') draft = { t: 'ink', uid: pt.uid, pts: [[pt.x, pt.y]] };
-  else if (tool === 'text') {
-    const txt = $('#annText').value.trim(); if (!txt) { $('#annText').focus(); say('Type the text first, then click on the page.'); return; }
-    addAnn(pt.uid, { t: 'text', x: pt.x, y: pt.y, s: +$('#annSize').value || 12, txt });
-  } else if (tool === 'sign') {
+  else if (tool === 'text') addInline(pt, 'text');
+  else if (tool === 'sign') {
     if (!sigPng) { say('Create your signature in the Sign tab first.'); return; }
     const w = 170, h = w * sigSize.h / sigSize.w;
     addAnn(pt.uid, { t: 'img', x: pt.x - w / 2, y: pt.y - h / 2, w, h, png: sigPng });
@@ -707,5 +757,5 @@ $('#savePdfBtn').onclick = async () => {
   catch (err) { busy(''); say('Could not build the PDF: ' + err.message); }
 };
 
-window.PDFWS = { onTab: t => { closeEditor(true); if (t in TABTOOL) setTool(TABTOOL[t]); else if (tool === 'edit' || tool === 'redact') setTool('none'); }, open, build: () => build(pages), state: () => ({ pages, annots, values, fields, stamps }) };
+window.PDFWS = { toBlocks, onTab: t => { closeEditor(true); if (t in TABTOOL) setTool(TABTOOL[t]); else if (tool === 'edit' || tool === 'redact') setTool('none'); }, open, build: () => build(pages), state: () => ({ pages, annots, values, fields, stamps }) };
 }
