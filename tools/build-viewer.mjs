@@ -77,4 +77,16 @@ fs.copyFileSync(path.join(root, 'samples/lease-sample.leaf'), path.join(mk('samp
 fs.writeFileSync(path.join(out, 'robots.txt'), 'User-agent: *\nAllow: /\nSitemap: https://leafdocs.org/sitemap.xml\n');
 fs.writeFileSync(path.join(out, 'sitemap.xml'), '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>https://leafdocs.org/</loc></url>\n<url><loc>https://leafdocs.org/developers/</loc></url>\n<url><loc>https://leafdocs.org/spec/</loc></url>\n<url><loc>https://leafdocs.org/app/</loc></url>\n</urlset>\n');
 fs.writeFileSync(path.join(out, '_headers'), '/samples/*\n  Content-Type: application/vnd.leaf+zip\n  Content-Disposition: attachment\n/app/*\n  Cache-Control: no-cache\n');
+// Version shared assets by content so a new logo or stylesheet reaches returning visitors at once.
+{
+  const h = f => crypto.createHash('sha256').update(fs.readFileSync(path.join(out, f))).digest('hex').slice(0, 10);
+  const ver = { 'style.css': h('style.css'), 'favicon.svg': h('favicon.svg'), 'app/icon.svg': h('app/icon.svg') };
+  const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
+  for (const f of walk(out).filter(f => f.endsWith('.html') && !/reader(-pdf)?\.html$/.test(f))) {
+    const t = fs.readFileSync(f, 'utf8');
+    const n = t.replace(/((?:href|src)=")((?:\/)?(?:style\.css|favicon\.svg))"/g, (m, a, u) => a + u + '?v=' + ver[u.replace(/^\//, '')] + '"')
+      .replace(/(href=")icon\.svg"/g, (m, a) => a + 'icon.svg?v=' + ver['app/icon.svg'] + '"');
+    if (n !== t) fs.writeFileSync(f, n);
+  }
+}
 console.log('Built dist/. Serve it with any static host, e.g. npx serve dist');
