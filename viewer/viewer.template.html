@@ -33,7 +33,9 @@ main{display:grid;grid-template-columns:76px minmax(0,1fr) 360px;gap:20px;paddin
 .page{position:relative;width:min(100%,820px);aspect-ratio:612/792;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12),0 8px 24px rgba(0,0,0,.08);border-radius:2px;color-scheme:light}
 .page svg{position:absolute;inset:0;width:100%;height:100%}
 .page text{font-family:Helvetica,Arial,sans-serif}
-.editing .page text.ed{cursor:text}.editing .page text.ed:hover{fill:#0b5d63}
+.editing .page{cursor:text}.editing .page text.ed:hover{fill:#0b5d63}
+.ed-box{position:absolute;z-index:3;box-sizing:border-box;margin:0;background:#fff;color:#16191d;font-family:Helvetica,Arial,sans-serif;outline:2px solid #0b5d63;outline-offset:3px;white-space:pre-wrap;overflow-wrap:break-word;caret-color:#0b5d63;cursor:text}.ed-box b{font-weight:700}
+.fmtbar{display:flex;gap:8px;margin:0 0 14px}.fmtbar button{min-width:44px;justify-content:center}
 .hl{fill:rgba(11,93,99,.08);stroke:rgba(11,93,99,.5);stroke-dasharray:3 3}
 .fld{position:absolute;border:1px solid #9aa4ae;background:#f7fafc;border-radius:2px;font-family:Helvetica,Arial,sans-serif;color:#111;padding:0 .4em;margin:0}
 .fld:focus{outline:2px solid #0b5d63;outline-offset:1px;background:#fff}
@@ -140,9 +142,15 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
     </div>
     <div class="pane" id="tab-edit" hidden>
       <h2>Edit text</h2>
-      <p class="lead">Editing is on. Click any text on the page to change it.</p>
-      <ol class="steps"><li>Click a paragraph, heading or table cell.</li><li>Change the text in the box and press Apply.</li><li>Press Save .leaf at the top to keep your changes.</li></ol>
-      <p class="note">Every edit is recorded in History. If the document was already signed, editing breaks that signature, which is how tampering is detected.</p>
+      <p class="lead">Click any text on the page and type, just like in a word processor. Fonts, sizes and spacing stay exactly as designed.</p>
+      <div class="fmtbar"><button id="boldBtn" aria-pressed="false" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button><button id="undoEdit" title="Undo (Ctrl+Z)">Undo</button></div>
+      <ul class="steps">
+        <li>Select words and press <b>B</b> (or Ctrl+B) to make them bold.</li>
+        <li>Press Enter for a new paragraph or list item.</li>
+        <li>In a table, press Tab to move to the next cell.</li>
+        <li>Click outside the text, or press Esc, when you are done.</li>
+      </ul>
+      <p class="note">Press Save .leaf at the top to keep your changes. Every edit is recorded in History. Editing a signed document breaks its signature, which is how tampering is detected.</p>
     </div>
     <div class="pane" id="tab-history" hidden>
       <h2>History</h2>
@@ -246,14 +254,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
     </div>
   </aside>
 </main>
-<dialog id="editDlg">
-  <form method="dialog" id="editForm">
-    <h3 style="margin:0 0 4px" id="edTitle">Edit block</h3>
-    <p class="note" id="edHint" style="margin:0 0 10px"></p>
-    <textarea id="edText"></textarea>
-    <div class="row" style="justify-content:flex-end"><button value="cancel" type="button" id="edCancel">Cancel</button><button class="primary" value="ok" id="edOk">Apply</button></div>
-  </form>
-</dialog>
+
 <dialog id="pwDlg"><form method="dialog"><h3 id="pwTitle" style="margin:0 0 10px">Password required</h3><label class="f" for="pwIn">Password</label><input class="t" id="pwIn" type="password" autocomplete="current-password"><div class="row" style="justify-content:flex-end"><button type="button" id="pwCancel">Cancel</button><button class="primary" id="pwOk">Unlock</button></div></form></dialog>
 <div id="busy" class="busy" role="status" hidden></div>
 <dialog id="msgDlg"><p id="msgText" style="margin:0 0 14px"></p><div class="row" style="justify-content:flex-end;margin:0"><button class="primary" id="msgOk">OK</button></div></dialog>
@@ -362,43 +363,158 @@ $('#pages').addEventListener('change', async e => {
   renderParts(); renderLog(); await renderSigs();
 });
 
-/* ---------- editing ---------- */
-let editing = false, edBlock = null;
-$('#editBtn').onclick = () => { editing = !editing; $('#editBtn').setAttribute('aria-pressed', editing); $('#pages').classList.toggle('editing', editing); setStatus(editing ? [...statusLines.filter(l => !l[1].startsWith('Edit mode')), ['', 'Edit mode: click any text on the page']] : statusLines.filter(l => !l[1].startsWith('Edit mode'))); };
-$('#pages').addEventListener('click', e => {
-  if (!editing) return;
-  const t = e.target.closest('text.ed'); if (!t) return;
-  const bl = st.doc.blocks.find(b => b.id === t.dataset.id); if (!bl) return;
-  edBlock = bl;
-  let txt = '', hint = '';
-  if (bl.type === 'heading') { txt = bl.text; hint = 'Heading text.'; }
-  else if (bl.type === 'paragraph') { txt = Leaf.runsToText(bl.text); hint = 'Wrap words in **double asterisks** for bold.'; }
-  else if (bl.type === 'list') { txt = bl.items.join('\n'); hint = 'One list item per line. **Bold** works too.'; }
-  else if (bl.type === 'table') { txt = bl.rows.map(r => r.join(' | ')).join('\n'); hint = 'One row per line, cells separated by | . Keep the same number of cells per row.'; }
-  else if (bl.type === 'fields' || bl.type === 'signature') { say('Form fields are filled in directly on the page.'); return; }
-  $('#edTitle').textContent = 'Edit ' + bl.type + ' · block ' + bl.id;
-  $('#edHint').textContent = hint; $('#edText').value = txt;
-  $('#editDlg').showModal(); $('#edText').focus();
-});
-$('#edCancel').onclick = () => $('#editDlg').close();
-$('#editForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  const bl = edBlock, v = $('#edText').value;
-  if (bl.type === 'heading') bl.text = v.replace(/\n+/g, ' ').trim() || bl.text;
-  else if (bl.type === 'paragraph') bl.text = Leaf.textToRuns(v.replace(/\n+/g, ' '));
-  else if (bl.type === 'list') bl.items = v.split('\n').map(s => s.trim()).filter(Boolean);
-  else if (bl.type === 'table') {
-    const rows = v.split('\n').filter(s => s.trim()).map(r => r.split('|').map(c => c.trim()));
-    if (!rows.length || rows.some(r => r.length !== bl.widths.length)) { say('Each row needs exactly ' + bl.widths.length + ' cells.'); return; }
-    bl.rows = rows;
+/* ---------- editing: in place, like a word processor ---------- */
+// The page is drawn from a fixed layout, so the editor only changes the words. Fonts, sizes, margins and
+// spacing come from the document's styles and cannot be changed by typing, so formatting can't get messed up.
+let editing = false, ed = null, undoStack = [];
+const editGeom = () => Leaf.layout(st.doc, st.styles, metrics, true);
+const same = (b, t) => b.id === t.id && b.li === t.li && b.r === t.r && b.c === t.c;
+const newId = () => 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+$('#editBtn').onclick = () => {
+  editing = !editing; $('#editBtn').setAttribute('aria-pressed', editing); $('#pages').classList.toggle('editing', editing);
+  if (!editing) commitEdit();
+  setStatus(editing ? [...statusLines.filter(l => !l[1].startsWith('Edit mode')), ['', 'Edit mode: click any text on the page and type']] : statusLines.filter(l => !l[1].startsWith('Edit mode')));
+};
+function boxAt(pi, x, y) {
+  const items = ((editGeom().pages[pi] || {}).items || []).filter(i => i.k === 'box'); let best = null, area = 1e12;
+  for (const b of items) if (x >= b.x - 6 && x <= b.x + b.w + 6 && y >= b.y - 3 && y <= b.y + b.h + 3 && b.w * b.h < area) { best = b; area = b.w * b.h; }
+  return best;
+}
+function domToRuns(root) {
+  const out = [];
+  const push = (t, b) => { if (!t) return; const l = out[out.length - 1]; if (l && !!l.b === b) l.t += t; else out.push(b ? { t, b: true } : { t }); };
+  const walk = (n, b) => { for (const c of n.childNodes) {
+    if (c.nodeType === 3) push(c.nodeValue.replace(/[ \n\r]/g, ' '), b);
+    else if (c.nodeType === 1 && c.tagName !== 'BR') { const w = parseInt(getComputedStyle(c).fontWeight, 10); walk(c, b || /^(B|STRONG)$/.test(c.tagName) || w >= 600); }
+  } };
+  walk(root, false); return out;
+}
+const cleanRuns = runs => {
+  const r = runs.map(x => ({ ...x })); if (r.length) r[0].t = r[0].t.replace(/^\s+/, ''); if (r.length) r[r.length - 1].t = r[r.length - 1].t.replace(/\s+$/, '');
+  const o = r.filter(x => x.t); return o.length ? o : [{ t: '' }];
+};
+const isEmpty = runs => !runs.some(x => x.t.trim());
+const kindOf = t => { const bl = st.doc.blocks.find(b => b.id === t.id); return bl ? (bl.type === 'table' ? 'cell' : bl.type) : ''; };
+async function openEditor(t, pt, caret) {
+  const L = editGeom(); let pi = -1, box = null;
+  L.pages.forEach((p, i) => p.items.forEach(b => { if (b.k === 'box' && same(b, t) && (!box || i === (pt && pt.pi))) { box = b; pi = i; } }));
+  const bl = st.doc.blocks.find(b => b.id === t.id); const page = document.querySelectorAll('#pages .page')[pi];
+  if (!box || !bl || !page) return;
+  const runs = bl.type === 'heading' ? [{ t: bl.text }] : bl.type === 'paragraph' ? bl.text : bl.type === 'list' ? Leaf.textToRuns(bl.items[t.li]) : [{ t: bl.rows[t.r][t.c] }];
+  const k = page.clientWidth / st.styles.page.width, el = document.createElement('div');
+  el.className = 'ed-box'; el.contentEditable = 'true'; el.spellcheck = true; el.setAttribute('role', 'textbox'); el.setAttribute('aria-label', 'Edit ' + kindOf(t));
+  el.innerHTML = runs.map(r => r.b ? '<b>' + esc(r.t) + '</b>' : esc(r.t)).join('');
+  const pad = (box.pad || 0) * k;
+  Object.assign(el.style, { left: (box.x * k) + 'px', top: (box.y * k) + 'px', width: (box.w * k) + 'px', minHeight: (box.h * k) + 'px', fontSize: (box.size * k) + 'px', lineHeight: box.lh, fontWeight: box.b ? 700 : 400, color: box.c || '#16191d', padding: pad + 'px' });
+  page.appendChild(el); ed = { el, t, kind: kindOf(t) }; el.focus();
+  const sel = getSelection(); let rg = null;
+  if (caret === 'point' && pt) {
+    if (document.caretRangeFromPoint) rg = document.caretRangeFromPoint(pt.cx, pt.cy);
+    else if (document.caretPositionFromPoint) { const cp = document.caretPositionFromPoint(pt.cx, pt.cy); if (cp) { rg = document.createRange(); rg.setStart(cp.offsetNode, cp.offset); rg.collapse(true); } }
+    if (rg && !el.contains(rg.startContainer)) rg = null;
   }
-  $('#editDlg').close();
-  st.history.push({ time: now(), author: author(), op: 'replace', block: bl.id });
-  st.modified = now();
-  await relayout();
-  setStatus([['warn', 'Edited: pages re-laid out from the content, new snapshot written'], ...statusLines.filter(l => !l[0] && !l[1].startsWith('Edit mode'))]);
-  await refresh();
+  if (!rg) { rg = document.createRange(); rg.selectNodeContents(el); rg.collapse(caret === 'start'); }
+  sel.removeAllRanges(); sel.addRange(rg);
+  el.addEventListener('keydown', onEdKey);
+  el.addEventListener('paste', e => { e.preventDefault(); const tx = (e.clipboardData || window.clipboardData).getData('text/plain').replace(/\s*[\r\n]+\s*/g, ' '); document.execCommand('insertText', false, tx); });
+  el.addEventListener('drop', e => e.preventDefault());
+  el.addEventListener('focusout', () => { if (ed && ed.el === el) commitEdit(); });
+  syncFmt();
+}
+function splitAtCaret(el) {
+  const sel = getSelection(); if (!sel.rangeCount) return null; const r = sel.getRangeAt(0); if (!el.contains(r.startContainer)) return null;
+  r.deleteContents();
+  const pre = document.createRange(); pre.selectNodeContents(el); pre.setEnd(r.startContainer, r.startOffset);
+  const post = document.createRange(); post.selectNodeContents(el); post.setStart(r.startContainer, r.startOffset);
+  const conv = rg => { const d = document.createElement('div'); d.appendChild(rg.cloneContents()); return domToRuns(d); };
+  return { pre: conv(pre), post: conv(post) };
+}
+async function onEdKey(e) {
+  const k = ed && ed.kind; const rich = k === 'paragraph' || k === 'list';
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+    const c = e.key.toLowerCase();
+    if (c === 'b' && !rich) e.preventDefault();
+    else if (c === 'i' || c === 'u') e.preventDefault();
+    return;
+  }
+  if (e.key === 'Escape') { e.preventDefault(); await commitEdit(); return; }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (k === 'cell') { await commitEdit(); return; }
+    await commitEdit(splitAtCaret(ed.el) || undefined, true); return;
+  }
+  if (e.key === 'Tab' && k === 'cell') {
+    e.preventDefault(); const t = ed.t, bl = st.doc.blocks.find(b => b.id === t.id), nc = bl.widths.length;
+    let r = t.r, c = t.c + (e.shiftKey ? -1 : 1);
+    if (c >= nc) { c = 0; r++; } if (c < 0) { c = nc - 1; r--; }
+    await commitEdit(); if (r >= 0 && r < bl.rows.length) await openEditor({ id: t.id, r, c }, null, 'end');
+  }
+}
+async function commitEdit(split, openNext) {
+  if (!ed) return false;
+  const { el, t } = ed; ed = null;
+  const bl = st.doc.blocks.find(b => b.id === t.id); if (!bl) return false;
+  const before = JSON.stringify(st.doc), idx = st.doc.blocks.indexOf(bl);
+  const runs = cleanRuns(split ? split.pre : domToRuns(el)), post = split ? cleanRuns(split.post) : null, blank = isEmpty(runs);
+  const plain = runs.map(r => r.t).join('').replace(/\s+/g, ' ').trim();
+  let next = null, what = bl.type === 'table' ? 'table cell' : bl.type;
+  const para = text => ({ id: newId(), type: 'paragraph', text });
+  if (bl.type === 'heading') {
+    let pos = idx + 1; if (blank) { st.doc.blocks.splice(idx, 1); pos = idx; } else bl.text = plain;
+    if (split) { const nb = para(post); st.doc.blocks.splice(pos, 0, nb); next = { id: nb.id }; }
+  } else if (bl.type === 'paragraph') {
+    let pos = idx + 1; if (blank && !split) { st.doc.blocks.splice(idx, 1); pos = idx; } else bl.text = runs;
+    if (split) { const nb = para(post); if (bl.style) nb.style = bl.style; st.doc.blocks.splice(pos, 0, nb); next = { id: nb.id }; }
+  } else if (bl.type === 'list') {
+    what = 'list item';
+    if (split && blank && isEmpty(post)) {
+      const tail = bl.items.slice(t.li + 1); bl.items.splice(t.li);
+      let pos = idx + 1; if (!bl.items.length) { st.doc.blocks.splice(idx, 1); pos = idx; }
+      const nb = para([{ t: '' }]); st.doc.blocks.splice(pos, 0, nb); next = { id: nb.id };
+      if (tail.length) st.doc.blocks.splice(pos + 1, 0, { id: newId(), type: 'list', items: tail });
+    } else {
+      if (blank && !split) { bl.items.splice(t.li, 1); if (!bl.items.length) st.doc.blocks.splice(idx, 1); }
+      else bl.items[t.li] = Leaf.runsToText(runs);
+      if (split) { bl.items.splice(t.li + 1, 0, Leaf.runsToText(post)); next = { id: bl.id, li: t.li + 1 }; }
+    }
+  } else if (bl.type === 'table') { bl.rows[t.r][t.c] = plain; }
+  const after = JSON.stringify(st.doc);
+  if (after !== before) {
+    undoStack.push(before); if (undoStack.length > 50) undoStack.shift();
+    st.history.push({ time: now(), author: author(), op: 'replace', block: bl.id, what });
+    st.modified = now(); await relayout();
+    setStatus([['warn', 'Edited: the pages were re-laid out from the content'], ...statusLines.filter(l => !l[0] && !l[1].startsWith('Edit mode')), ['', 'Edit mode: click any text on the page and type']]);
+    await refresh();
+  } else renderPages();
+  if (next && openNext) await openEditor(next, null, 'start');
+  return after !== before;
+}
+$('#pages').addEventListener('mousedown', async e => {
+  if (!editing || e.button !== 0 || e.target.closest('.ed-box, .fld')) return;
+  const page = e.target.closest('.page'); if (!page) return;
+  const pi = +page.dataset.p, r = page.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * st.styles.page.width, y = (e.clientY - r.top) / r.height * st.styles.page.height;
+  const box = boxAt(pi, x, y);
+  if (!box) { if (ed) { e.preventDefault(); await commitEdit(); } return; }
+  e.preventDefault();
+  const t = { id: box.id, li: box.li, r: box.r, c: box.c };
+  const changed = await commitEdit();
+  await openEditor(t, { pi, cx: e.clientX, cy: e.clientY }, changed ? 'end' : 'point');
 });
+function syncFmt() {
+  const rich = ed && (ed.kind === 'paragraph' || ed.kind === 'list');
+  $('#boldBtn').disabled = !rich; $('#boldBtn').setAttribute('aria-pressed', !!(rich && document.queryCommandState('bold')));
+}
+document.addEventListener('selectionchange', () => { if (ed) syncFmt(); });
+$('#boldBtn').addEventListener('mousedown', e => e.preventDefault());
+$('#boldBtn').onclick = () => { if (ed && !$('#boldBtn').disabled) { document.execCommand('bold'); syncFmt(); } };
+$('#undoEdit').addEventListener('mousedown', e => e.preventDefault());
+$('#undoEdit').onclick = async () => {
+  if (ed) { document.execCommand('undo'); return; }
+  const prev = undoStack.pop(); if (!prev) { say('Nothing to undo yet.'); return; }
+  st.doc = JSON.parse(prev); st.history.push({ time: now(), author: author(), op: 'undo' }); st.modified = now();
+  await relayout(); await refresh();
+};
 
 /* ---------- inside the file ---------- */
 function partBytes() {
@@ -427,7 +543,7 @@ $('#parts').addEventListener('click', e => { const b = e.target.closest('.part')
 
 /* ---------- history ---------- */
 function renderLog() {
-  const label = h => h.op === 'create' ? 'Created the document' : h.op === 'fill' ? 'Filled “' + h.field + '”' : h.op === 'replace' ? 'Edited block ' + h.block : h.op === 'seal' ? 'Sealed and signed version ' + h.version : h.op;
+  const label = h => h.op === 'create' ? 'Created the document' : h.op === 'fill' ? 'Filled “' + h.field + '”' : h.op === 'replace' ? 'Edited ' + (h.what ? 'a ' + h.what : 'text') : h.op === 'undo' ? 'Undid the last edit' : h.op === 'seal' ? 'Sealed and signed version ' + h.version : h.op;
   $('#log').innerHTML = st.history.slice().reverse().map(h => '<li>' + esc(label(h)) + '<span>' + esc(h.author) + ' · ' + esc(fmt(h.time)) + '</span></li>').join('');
 }
 
@@ -485,10 +601,12 @@ async function offer(filename, data) {
   catch (err) { if (err && err.code !== 'declined') say('The file was not saved (' + (err.code || 'error') + ').'); }
 }
 $('#saveBtn').onclick = async () => {
+  await commitEdit();
   const p = await Leaf.pack(st);
   await offer(slug() + (downloads ? '.leaf.zip' : '.leaf'), p.bytes);
 };
 $('#pdfBtn').onclick = async () => {
+  await commitEdit();
   if (!window.jspdf) { say('The PDF engine did not load in this view.'); return; }
   const pdf = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
   pdf.setProperties({ title: st.doc.title, creator: 'Leaf reference viewer 0.1' });
@@ -532,7 +650,7 @@ document.querySelectorAll('.rail').forEach(t => t.addEventListener('click', e =>
   apply(saved || /[?&]dev\b/.test(location.search));
   box.addEventListener('change', () => { apply(box.checked); if (box.checked) tab.click(); });
 })();
-window.LeafApp = { say, offer, setMode };
+window.LeafApp = { say, offer, setMode, state: () => st };
 
 /* ---------- start ---------- */
 const u8 = Uint8Array.from(atob(SAMPLE), c => c.charCodeAt(0));
