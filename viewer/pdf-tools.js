@@ -170,7 +170,7 @@ function drawOverlay(uid) {
   if (draft && draft.uid === uid) {
     if (draft.t === 'ink') out += '<polyline fill="none" stroke="#0b5d63" stroke-width="2" points="' + draft.pts.map(pt => V(pt[0], pt[1]).join(',')).join(' ') + '"/>';
     else if (draft.t === 'line' || draft.t === 'arrow') { const [x1, y1] = V(draft.x0, draft.y0), [x2, y2] = V(draft.x1, draft.y1); out += '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="#0b5d63" stroke-width="2" stroke-dasharray="4 3"/>'; }
-    else { const [x1, y1] = V(draft.x0, draft.y0), [x2, y2] = V(draft.x1, draft.y1); const col = draft.t === 'redact' ? '#d11' : draft.t === 'field' ? '#0b5d63' : '#c9a400'; out += '<rect x="' + Math.min(x1, x2) + '" y="' + Math.min(y1, y2) + '" width="' + Math.abs(x2 - x1) + '" height="' + Math.abs(y2 - y1) + '" fill="' + col + '" fill-opacity=".15" stroke="' + col + '" stroke-dasharray="4 3"/>'; }
+    else { const fl = ['hl', 'ul', 'st'].includes(draft.t) && Math.abs(draft.y1 - draft.y0) < 6, my = (draft.y0 + draft.y1) / 2; const [x1, y1] = V(draft.x0, fl ? my + 6 : draft.y0), [x2, y2] = V(draft.x1, fl ? my - 6 : draft.y1); const col = draft.t === 'redact' ? '#d11' : draft.t === 'field' ? '#0b5d63' : '#c9a400'; out += '<rect x="' + Math.min(x1, x2) + '" y="' + Math.min(y1, y2) + '" width="' + Math.abs(x2 - x1) + '" height="' + Math.abs(y2 - y1) + '" fill="' + col + '" fill-opacity=".15" stroke="' + col + '" stroke-dasharray="4 3"/>'; }
   }
   svg.innerHTML = out;
 }
@@ -196,7 +196,7 @@ const redrawOverlays = () => pages.forEach(p => drawOverlay(p.uid));
 /* ---------- tools ---------- */
 function setTool(t) {
   tool = t;
-  document.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t));
+  document.querySelectorAll('button[data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t));
   $('#pdfPages').dataset.tool = t;
   const hints = { none: 'Pick a tool, then work on the page. Form fields can be typed into directly.', edit: 'Click any line of text on the page, then type to change it. Enter to apply, Esc to cancel.', ul: 'Drag across text to underline it.', st: 'Drag across text to strike it through.', rect: 'Drag to draw a box.', image: insPng ? 'Click where the image goes.' : 'Choose an image first.', hl: 'Drag across text to highlight it.', ell: 'Drag to draw an oval.', line: 'Drag to draw a line.', arrow: 'Drag from the tail to the point of the arrow.', link: 'Drag a box over the text or image that should open the link.', note: 'Type the note, then click where its pin goes.', stamp: 'Click where the stamp goes.',  ink: 'Draw freely on the page.', text: 'Type your text below, then click where it goes.', sign: sigPng ? 'Click where your signature goes.' : 'Create your signature in the Sign tab first.', redact: 'Drag over anything to remove. It is permanently removed when you save.', field: 'Drag a box where the new field goes.' };
   $('#toolHint').textContent = hints[t] || ''; if ($('#editHint')) $('#editHint').textContent = t === 'edit' ? hints.edit : ''; $('#redactHint').textContent = t === 'redact' ? hints.redact : ''; $('#fieldHint').textContent = t === 'field' ? hints.field : '';
@@ -406,10 +406,20 @@ $('#pdfPages').addEventListener('pointermove', e => {
   if (draft.t === 'ink') draft.pts.push([pt.x, pt.y]); else { draft.x1 = pt.x; draft.y1 = pt.y; }
   drawOverlay(draft.uid);
 });
-$('#pdfPages').addEventListener('pointerup', () => {
+// Highlight, underline and strike snap to the text lines the drag crosses, so a plain left-to-right drag works.
+async function snapToText(uid, box) {
+  const lines = (await runsFor(uid)).filter(r => r.str && r.str.trim()).map(bbox)
+    .filter(b => b.x < box.x + box.w && b.x + b.w > box.x && b.y <= box.y + box.h + 2 && b.y + b.h >= box.y - 2);
+  if (!lines.length) return box.h >= 6 ? box : { x: box.x, y: box.y + box.h / 2 - 6, w: box.w, h: 12 };
+  const x0 = Math.max(box.x, Math.min(...lines.map(b => b.x))), x1 = Math.min(box.x + box.w, Math.max(...lines.map(b => b.x + b.w)));
+  const y0 = Math.min(...lines.map(b => b.y)), y1 = Math.max(...lines.map(b => b.y + b.h));
+  return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: y1 - y0 };
+}
+$('#pdfPages').addEventListener('pointerup', async () => {
   if (!draft) return; const d = draft; draft = null;
-  const box = { x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w: Math.abs(d.x1 - d.x0), h: Math.abs(d.y1 - d.y0) };
-  if (['hl', 'ul', 'st', 'rect', 'redact'].includes(d.t) && box.w > 3 && (box.h > 3 || d.t === 'ul' || d.t === 'st')) addAnn(d.uid, { t: d.t, ...box });
+  let box = { x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w: Math.abs(d.x1 - d.x0), h: Math.abs(d.y1 - d.y0) };
+  if (['hl', 'ul', 'st'].includes(d.t) && box.w > 3) box = await snapToText(d.uid, box);
+  if (['hl', 'ul', 'st', 'rect', 'redact'].includes(d.t) && box.w > 3 && (box.h > 3 || ['hl', 'ul', 'st'].includes(d.t))) addAnn(d.uid, { t: d.t, ...box });
   else if (d.t === 'field' && box.w > 6 && box.h > 6) {
     const ft = $('#nfType').value, used = new Set([...fields.map(f => f.name), ...Object.values(annots).flat().filter(a => a.t === 'newfield').map(a => a.name)]);
     let name = ($('#nfName').value.trim() || 'field').replace(/[^\w\-]+/g, '_'), n = name, k = 2; while (used.has(n)) n = name + '_' + k++;
@@ -426,7 +436,7 @@ $('#pdfPages').addEventListener('pointerup', () => {
   else if (d.t === 'ink' && d.pts.length > 1) addAnn(d.uid, { t: 'ink', pts: d.pts });
   else drawOverlay(d.uid);
 });
-document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(tool === b.dataset.tool ? 'none' : b.dataset.tool));
+document.querySelectorAll('button[data-tool]').forEach(b => b.onclick = () => setTool(tool === b.dataset.tool ? 'none' : b.dataset.tool));
 document.querySelectorAll('.undoBtn').forEach(b => b.onclick = () => { const s = undo.pop(); if (!s) return; const o = JSON.parse(s); pages = o.pages; annots = o.annots; renderAll(); });
 $('#nfType').onchange = () => { $('#nfOptWrap').hidden = $('#nfType').value !== 'dropdown'; };
 
