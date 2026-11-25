@@ -34,7 +34,7 @@ fs.writeFileSync(path.join(mk('spec'), 'index.html'), `<!doctype html>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css">
 <link rel="canonical" href="https://leafdocs.org/spec/"></head><body>
 <header class="top"><div class="wrap"><a class="brand" href="/"><img src="/favicon.svg" alt="" width="26" height="26">Leaf</a>
-<nav><a href="/app/">Edit a PDF</a><a href="/developers/">For developers</a><a href="/spec/">Spec</a><a href="https://github.com/leafdocsorg-stack/leaf">GitHub</a></nav></div></header>
+<nav><a href="/app/">Open editor</a><a href="/developers/">Developers</a><a href="/spec/">Spec</a><a href="https://github.com/leafdocsorg-stack/leaf">GitHub</a></nav></div></header>
 <main class="wrap doc">${body}
 <p><a href="/spec/leaf-spec-0.1.md">Download this spec as Markdown</a></p></main>
 <footer><div class="wrap"><span>Specification text: CC BY 4.0</span><span><a href="/">Home</a> · <a href="https://github.com/leafdocsorg-stack/leaf/issues">Give feedback</a></span></div></footer>
