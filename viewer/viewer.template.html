@@ -17,7 +17,7 @@
 *{box-sizing:border-box;min-width:0}
 body{margin:0;background:var(--desk);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
 header{background:var(--panel);border-bottom:1px solid var(--line);padding:12px max(2vw,16px);display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;position:sticky;top:0;z-index:5}
-.brand{font-weight:700;font-size:15px;letter-spacing:-.01em}.brand span{color:var(--mute);font-weight:500}
+.brand{font-weight:700;font-size:15px;letter-spacing:-.01em;color:var(--ink);text-decoration:none}.brand:hover{color:var(--acc)}.homelink{font-size:13.5px;color:var(--mute);text-decoration:none}.homelink:hover{color:var(--acc);text-decoration:underline}.start .links{margin:26px 0 0;font-size:13.5px;color:var(--mute)}.start .links a{color:var(--mute)}.brand span{color:var(--mute);font-weight:500}
 .doc-title{font-weight:600;font-size:15px;flex:1 1 220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tools{display:flex;flex-wrap:wrap;gap:8px}
 button,.btn{font:500 14px Inter,system-ui,sans-serif;min-height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
@@ -101,7 +101,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
 @media(max-width:900px){main,.pdfm{grid-template-columns:minmax(0,1fr)}aside,.thumbs,.rail{position:static;max-height:none}.rail{flex-direction:row;overflow-x:auto}.rail button{flex:1 0 76px}.devtoggle{margin:0 0 0 6px;padding:0 0 0 8px;border-top:0;border-left:1px solid var(--line);flex:0 0 auto}#pdfThumbs{display:flex;gap:8px;overflow-x:auto}.thumb{flex:0 0 130px}}
 .start{display:block;max-width:560px;margin:10vh auto 0;text-align:center;padding:0 16px}
 .start h1{font-size:26px;letter-spacing:-.4px;margin:0 0 8px}.start p{color:var(--mute);margin:0 0 22px}
-.start .row{justify-content:center}.start .huge{min-height:60px;padding:0 40px;font-size:19px;border-radius:12px}.start .alt{margin:18px 0 0;font-size:14px}.linkbtn{border:0;background:none;min-height:0;padding:0;color:var(--acc);text-decoration:underline;font-size:14px}.rail.simple .adv{display:none}body[data-mode=leaf]:not(.dev) .chip:not(.warn):not(.bad){display:none}.rail .morebtn svg{width:24px;height:24px}details.more{margin:6px 0 14px;border-top:1px solid var(--line);padding-top:10px}details.more>summary{cursor:pointer;font-weight:600;color:var(--acc);min-height:32px;display:flex;align-items:center}details.more[open]>summary{margin-bottom:8px}.opt[hidden]{display:none}.start .big{min-height:48px;padding:0 22px;font-size:15px}
+.start .row{justify-content:center}.start .huge{min-height:56px;padding:0 28px;font-size:17px;border-radius:12px}.start .alt{margin:18px 0 0;font-size:14px}.linkbtn{border:0;background:none;min-height:0;padding:0;color:var(--acc);text-decoration:underline;font-size:14px}.rail.simple .adv{display:none}body[data-mode=leaf]:not(.dev) .chip:not(.warn):not(.bad){display:none}.rail .morebtn svg{width:24px;height:24px}details.more{margin:6px 0 14px;border-top:1px solid var(--line);padding-top:10px}details.more>summary{cursor:pointer;font-weight:600;color:var(--acc);min-height:32px;display:flex;align-items:center}details.more[open]>summary{margin-bottom:8px}.opt[hidden]{display:none}.start .big{min-height:48px;padding:0 22px;font-size:15px}
 .start .dz{border:1.5px dashed var(--line);border-radius:14px;padding:34px 20px;background:var(--panel)}
 .insgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.insgrid button{min-height:40px}
 @media(prefers-reduced-motion:no-preference){.page{transition:box-shadow .2s}}
@@ -113,7 +113,9 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
 </head>
 <body>
 <header>
-  <div class="brand">Leaf</div>
+  <a class="brand" href="/" title="Back to the Leaf website">Leaf</a>
+  <a class="homelink" href="/">&larr; Website</a>
+  <button id="homeBtn" hidden title="Close this file and go back to the start screen">Close file</button>
   <div class="doc-title" id="docTitle">Loading…</div>
   <div class="tools">
     <label class="btn" title="Open a different PDF or Leaf file">Open another<input type="file" id="fileIn" accept=".leaf,.lef,.zip,.pdf,application/pdf,application/zip"></label>
@@ -126,12 +128,12 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
 <div class="status" id="status" aria-live="polite"></div>
 <main id="startMain" class="start">
   <div class="dz">
-    <h1>Edit your PDF</h1>
-    <p>Choose a file to change text, fill in a form, sign or highlight. Free, and it never leaves your computer.</p>
-    <div class="row"><label class="btn primary huge">Choose a PDF<input type="file" id="fileIn2" accept=".leaf,.lef,.zip,.pdf,application/pdf,application/zip"></label></div>
+    <h1>Open or create a document</h1>
+    <p>Works with Leaf (<b>.leaf</b>) and PDF files. Everything stays on your computer.</p>
+    <div class="row"><label class="btn primary huge">Open a file<input type="file" id="fileIn2" accept=".leaf,.lef,.zip,.pdf,application/pdf,application/zip"></label><button class="huge" id="newDocBtn">New Leaf document</button></div>
     <p style="margin:16px 0 0;font-size:14px">or drop a file anywhere on this page</p>
   </div>
-  <p class="alt">No file yet? <button class="linkbtn" id="newDocBtn">Start a blank document</button></p>
+  <p class="links"><a href="/">Back to the website</a> · <a href="/spec/">About the Leaf format</a> · <a href="https://github.com/leafdocsorg-stack/leaf">Source code</a></p>
 </main>
 <main id="leafMain" hidden>
   <nav class="rail" role="tablist" aria-label="Tools">
@@ -702,7 +704,7 @@ async function openFile(f) {
   } catch (err) { say('Could not open that file: ' + err.message); }
 }
 function setMode(m, title) {
-  document.body.dataset.mode = m; $('#startMain').hidden = m !== 'start'; $('#leafMain').hidden = m !== 'leaf'; $('#pdfMain').hidden = m !== 'pdf';
+  document.body.dataset.mode = m; $('#homeBtn').hidden = m === 'start'; $('#startMain').hidden = m !== 'start'; $('#leafMain').hidden = m !== 'leaf'; $('#pdfMain').hidden = m !== 'pdf';
   document.querySelectorAll('.only-leaf').forEach(e => e.hidden = m !== 'leaf');
   document.querySelectorAll('.only-pdf').forEach(e => e.hidden = m !== 'pdf');
   if (m === 'leaf' && st) $('#docTitle').textContent = st.doc.title;
@@ -843,6 +845,7 @@ document.querySelectorAll('[data-exp]').forEach(b => b.onclick = async () => {
   apply(saved || /[?&]dev\b/.test(location.search));
   box.addEventListener('change', () => { apply(box.checked); if (box.checked) tab.click(); });
 })();
+$('#homeBtn').onclick = () => { if (confirm('Close this file and go back to the start screen? Anything you have not saved or downloaded will be lost.')) { setMode('start'); setStatus([]); } };
 window.LeafApp = { say, offer, setMode, state: () => st };
 
 /* ---------- start ---------- */
