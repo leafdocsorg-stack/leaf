@@ -101,7 +101,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
 @media(max-width:900px){main,.pdfm{grid-template-columns:minmax(0,1fr)}aside,.thumbs,.rail{position:static;max-height:none}.rail{flex-direction:row;overflow-x:auto}.rail button{flex:1 0 76px}.devtoggle{margin:0 0 0 6px;padding:0 0 0 8px;border-top:0;border-left:1px solid var(--line);flex:0 0 auto}#pdfThumbs{display:flex;gap:8px;overflow-x:auto}.thumb{flex:0 0 130px}}
 .start{display:block;max-width:560px;margin:10vh auto 0;text-align:center;padding:0 16px}
 .start h1{font-size:26px;letter-spacing:-.4px;margin:0 0 8px}.start p{color:var(--mute);margin:0 0 22px}
-.start .row{justify-content:center}.start .huge{min-height:56px;padding:0 28px;font-size:17px;border-radius:12px}.start .alt{margin:18px 0 0;font-size:14px}.linkbtn{border:0;background:none;min-height:0;padding:0;color:var(--acc);text-decoration:underline;font-size:14px}.rail.simple .adv{display:none}body[data-mode=leaf]:not(.dev) .chip:not(.warn):not(.bad){display:none}.rail .morebtn svg{width:24px;height:24px}details.more{margin:6px 0 14px;border-top:1px solid var(--line);padding-top:10px}details.more>summary{cursor:pointer;font-weight:600;color:var(--acc);min-height:32px;display:flex;align-items:center}details.more[open]>summary{margin-bottom:8px}.opt[hidden]{display:none}.start .big{min-height:48px;padding:0 22px;font-size:15px}
+.start .row{justify-content:center}.start .huge{min-height:56px;padding:0 28px;font-size:17px;border-radius:12px}.start .alt{margin:18px 0 0;font-size:14px}.linkbtn{border:0;background:none;min-height:0;padding:0;color:var(--acc);text-decoration:underline;font-size:14px}.rail.simple .adv{display:none}body[data-mode=leaf]:not(.dev) .chip:not(.warn):not(.bad){display:none}.rail .morebtn svg{width:24px;height:24px}details.more{margin:6px 0 14px;border-top:1px solid var(--line);padding-top:10px}details.more>summary{cursor:pointer;font-weight:600;color:var(--acc);min-height:32px;display:flex;align-items:center}details.more[open]>summary{margin-bottom:8px}.opt[hidden]{display:none}.sw{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 12px}.sw button{width:34px;height:34px;min-height:0;padding:0;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line)}.sw button[aria-pressed=true]{box-shadow:0 0 0 2px var(--acc)}.seg{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 12px}.seg button{min-height:36px;padding:0 12px}.start .big{min-height:48px;padding:0 22px;font-size:15px}
 .start .dz{border:1.5px dashed var(--line);border-radius:14px;padding:34px 20px;background:var(--panel)}
 .insgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.insgrid button{min-height:40px}
 @media(prefers-reduced-motion:no-preference){.page{transition:box-shadow .2s}}
@@ -123,6 +123,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
     <button id="saveBtn" class="primary only-leaf">Save</button>
     <button id="pdfBtn" class="only-leaf">Save as PDF</button>
     <button id="savePdfBtn" class="primary only-pdf" hidden>Download PDF</button>
+    <button id="leafBtn" class="only-pdf" hidden title="Turn the text of this PDF into an editable Leaf document (images and exact layout are not carried over)">Save as Leaf</button>
   </div>
 </header>
 <div class="status" id="status" aria-live="polite"></div>
@@ -253,16 +254,19 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
         <button data-tool="link" aria-pressed="false">Link</button>
       </div></details>
       <p id="toolHint" class="note"></p>
-      <div class="opt" data-for="text note"><label class="f" for="annText">Text</label>
-      <input class="t" id="annText" placeholder="Type here, then click on the page"></div>
-      <div class="opt" data-for="text"><label class="f" for="annSize">Text size</label>
-      <select class="t" id="annSize"><option>9</option><option>10</option><option selected>12</option><option>14</option><option>18</option><option>24</option></select></div>
+      <div class="opt" data-for="text"><label class="f">Text size</label>
+      <div class="seg" data-set="annSize"><button type="button" data-v="10">Small</button><button type="button" data-v="12">Normal</button><button type="button" data-v="18">Large</button><button type="button" data-v="24">Huge</button></div>
+      <select class="t" id="annSize" hidden><option>9</option><option>10</option><option selected>12</option><option>14</option><option>18</option><option>24</option></select></div>
       <div class="opt" data-for="image"><p class="note">Image: <span id="imgName"></span> <label class="btn" style="display:inline-flex;min-height:28px;padding:0 10px">Choose<input type="file" id="imgPick" accept="image/png,image/jpeg,image/webp"></label></p></div>
-      <div class="opt" data-for="hl"><label class="f" for="hlColor">Highlight colour</label><select class="t" id="hlColor"><option value="#ffd633">Yellow</option><option value="#7bdc6b">Green</option><option value="#ff8fb1">Pink</option><option value="#7fc8ff">Blue</option></select></div>
-      <div class="opt" data-for="text ink ul st rect ell line arrow" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
-        <div><label class="f" for="annColor">Colour</label><input type="color" id="annColor" value="#0b5d63" style="width:100%;height:42px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:2px"></div>
-        <div data-for="ink rect ell line arrow"><label class="f" for="annWidth">Line</label><select class="t" id="annWidth"><option value="1">Thin</option><option value="1.6" selected>Medium</option><option value="3">Thick</option></select></div>
-      </div>
+      <div class="opt" data-for="hl"><label class="f">Highlight colour</label>
+      <div class="sw" data-set="hlColor"><button type="button" data-v="#ffd633" style="background:#ffd633" aria-label="Yellow"></button><button type="button" data-v="#7bdc6b" style="background:#7bdc6b" aria-label="Green"></button><button type="button" data-v="#ff8fb1" style="background:#ff8fb1" aria-label="Pink"></button><button type="button" data-v="#7fc8ff" style="background:#7fc8ff" aria-label="Blue"></button></div>
+      <select class="t" id="hlColor" hidden><option value="#ffd633">Yellow</option><option value="#7bdc6b">Green</option><option value="#ff8fb1">Pink</option><option value="#7fc8ff">Blue</option></select></div>
+      <div class="opt" data-for="text ink ul st rect ell line arrow"><label class="f">Colour</label>
+      <div class="sw" data-set="annColor"><button type="button" data-v="#111111" style="background:#111111" aria-label="Black"></button><button type="button" data-v="#0b5d63" style="background:#0b5d63" aria-label="Teal"></button><button type="button" data-v="#c0261d" style="background:#c0261d" aria-label="Red"></button><button type="button" data-v="#2a6fdb" style="background:#2a6fdb" aria-label="Blue"></button><button type="button" data-v="#1a7f3c" style="background:#1a7f3c" aria-label="Green"></button><button type="button" data-v="#8a5a00" style="background:#8a5a00" aria-label="Brown"></button></div>
+      <input type="hidden" id="annColor" value="#0b5d63"></div>
+      <div class="opt" data-for="ink rect ell line arrow"><label class="f">Line</label>
+      <div class="seg" data-set="annWidth"><button type="button" data-v="1">Thin</button><button type="button" data-v="1.6">Medium</button><button type="button" data-v="3">Thick</button></div>
+      <select class="t" id="annWidth" hidden><option value="1">Thin</option><option value="1.6" selected>Medium</option><option value="3">Thick</option></select></div>
       <div class="opt" data-for="stamp"><label class="f" for="stampSel">Stamp</label>
       <select class="t" id="stampSel"><option value="APPROVED|#1a7f3c">Approved</option><option value="REJECTED|#c0261d">Rejected</option><option value="DRAFT|#6b6f76">Draft</option><option value="CONFIDENTIAL|#c0261d">Confidential</option><option value="FINAL|#0b5d63">Final</option><option value="REVIEWED|#2a6fdb">Reviewed</option><option value="VOID|#c0261d">Void</option></select></div>
       <div class="opt" data-for="link"><label class="f" for="linkUrl">Link address</label>
@@ -783,6 +787,18 @@ async function newDoc() {
   setMode('leaf'); await load(p.bytes, 'New document. Click the text to edit it, or use Insert to add more.');
   $('[data-tab="edit"]').click();
 }
+document.addEventListener('click', e => { const b = e.target.closest('.sw button, .seg button'); if (!b) return; const g = b.parentElement, el = document.getElementById(g.dataset.set); el.value = b.dataset.v; g.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+document.querySelectorAll('.sw, .seg').forEach(g => { const el = document.getElementById(g.dataset.set); const m = [...g.querySelectorAll('button')].find(x => x.dataset.v === el.value) || g.querySelector('button'); g.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === m)); });
+$('#leafBtn').onclick = async () => {
+  try {
+    const { title, blocks } = await PDFWS.toBlocks();
+    if (!blocks.length) { say('No text was found in this PDF to convert. If it is a scan, open More tools, then Convert, and make the text searchable first.'); return; }
+    const prev = st, r = await Leaf.unpack(Uint8Array.from(atob(SAMPLE), c => c.charCodeAt(0))), s0 = r.st;
+    s0.doc = { title, language: 'en-US', blocks }; s0.values = {}; s0.signatures = []; s0.versions = []; s0.history = [{ time: now(), author: author(), op: 'import', note: 'Converted from PDF' }]; s0.created = s0.modified = now();
+    st = s0; await relayout(); const p = await Leaf.pack(st), name = slug(); st = prev;
+    await offer(name + '.leaf', p.bytes);
+  } catch (err) { say('Could not convert this PDF: ' + err.message); }
+};
 $('#newDocBtn').onclick = () => newDoc().catch(err => say('Could not create the document: ' + err.message));
 function showWhere() {
   const b = st && st.doc.blocks.find(x => x.id === selId);
