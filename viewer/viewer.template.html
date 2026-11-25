@@ -100,7 +100,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
 .busy{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:10px 18px;border-radius:999px;font-size:14px;z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.2)}
 @media(max-width:900px){main,.pdfm{grid-template-columns:minmax(0,1fr)}aside,.thumbs,.rail{position:static;max-height:none}.rail{flex-direction:row;overflow-x:auto}.rail button{flex:1 0 76px}.devtoggle{margin:0 0 0 6px;padding:0 0 0 8px;border-top:0;border-left:1px solid var(--line);flex:0 0 auto}#pdfThumbs{display:flex;gap:8px;overflow-x:auto}.thumb{flex:0 0 130px}}
 .start{display:block;max-width:560px;margin:10vh auto 0;text-align:center;padding:0 16px}
-.start h1{font-size:26px;letter-spacing:-.4px;margin:0 0 8px}.start p{color:var(--mute);margin:0 0 22px}
+.install{max-width:520px;margin:18px auto 0;padding:16px 18px;border:1px solid var(--line,#e2e4e8);border-radius:12px;background:#fff;text-align:left;display:flex;gap:14px;align-items:center}.install p{margin:0!important;font-size:14px;line-height:1.45}.install button{flex:none}.start h1{font-size:26px;letter-spacing:-.4px;margin:0 0 8px}.start p{color:var(--mute);margin:0 0 22px}
 .start .row{justify-content:center}.start .huge{min-height:56px;padding:0 28px;font-size:17px;border-radius:12px}.start .alt{margin:18px 0 0;font-size:14px}.linkbtn{border:0;background:none;min-height:0;padding:0;color:var(--acc);text-decoration:underline;font-size:14px}.rail.simple .adv{display:none}body[data-mode=leaf]:not(.dev) .chip:not(.warn):not(.bad){display:none}.rail .morebtn svg{width:24px;height:24px}details.more{margin:6px 0 14px;border-top:1px solid var(--line);padding-top:10px}details.more>summary{cursor:pointer;font-weight:600;color:var(--acc);min-height:32px;display:flex;align-items:center}details.more[open]>summary{margin-bottom:8px}.opt[hidden]{display:none}.sw{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 12px}.sw button{width:34px;height:34px;min-height:0;padding:0;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line)}.sw button[aria-pressed=true]{box-shadow:0 0 0 2px var(--acc)}.seg{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 12px}.seg button{min-height:36px;padding:0 12px}.start .big{min-height:48px;padding:0 22px;font-size:15px}
 .start .dz{border:1.5px dashed var(--line);border-radius:14px;padding:34px 20px;background:var(--panel)}
 .insgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.insgrid button{min-height:40px}
@@ -133,6 +133,10 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
     <p>Works with Leaf (<b>.leaf</b>) and PDF files. Everything stays on your computer.</p>
     <div class="row"><label class="btn primary huge">Open a file<input type="file" id="fileIn2" accept=".leaf,.lef,.zip,.pdf,application/pdf,application/zip"></label><button class="huge" id="newDocBtn">New Leaf document</button></div>
     <p style="margin:16px 0 0;font-size:14px">or drop a file anywhere on this page</p>
+  </div>
+  <div class="install" id="installBox" hidden>
+    <p><b>Open .leaf files with a double-click.</b> Install Leaf and your computer will open .leaf files straight into this editor, and Save will write back to the same file. It stays free and works offline.</p>
+    <button id="installBtn">Install Leaf</button>
   </div>
   <p class="links"><a href="/">Back to the website</a> · <a href="/spec/">About the Leaf format</a> · <a href="https://github.com/leafdocsorg-stack/leaf">Source code</a></p>
 </main>
@@ -700,7 +704,9 @@ $('#signBtn').onclick = async () => {
 };
 
 /* ---------- open, save, export ---------- */
-async function openFile(f) {
+let fileHandle = null;
+async function openFile(f, handle) {
+  fileHandle = handle || null;
   try {
     const u = new Uint8Array(await f.arrayBuffer());
     if (u[0] === 0x25 && u[1] === 0x50 && u[2] === 0x44 && u[3] === 0x46) { if (!(await window.PDFWS.open(u, f.name))) return; setStatus([['good', 'Editing ' + f.name + ' in your browser. Nothing was uploaded.']]); return; }
@@ -732,6 +738,10 @@ async function offer(filename, data) {
 $('#saveBtn').onclick = async () => {
   await commitEdit();
   const p = await Leaf.pack(st);
+  if (fileHandle && fileHandle.createWritable && /\.(leaf|lef)$/i.test(fileHandle.name)) {
+    try { const w = await fileHandle.createWritable(); await w.write(p.bytes); await w.close(); setStatus([['good', 'Saved to ' + fileHandle.name + '.']]); return; }
+    catch (err) { if (err && err.name === 'AbortError') return; }
+  }
   await offer(slug() + (downloads ? '.leaf.zip' : '.leaf'), p.bytes);
 };
 $('#pdfBtn').onclick = async () => {
@@ -865,7 +875,12 @@ $('#homeBtn').onclick = () => { if (confirm('Close this file and go back to the 
 window.LeafApp = { say, offer, setMode, state: () => st };
 
 /* ---------- start ---------- */
-if ('launchQueue' in window) launchQueue.setConsumer(async p => { if (p.files && p.files.length) openFile(await p.files[0].getFile()); });
+if ('launchQueue' in window) launchQueue.setConsumer(async p => { if (p.files && p.files.length) openFile(await p.files[0].getFile(), p.files[0]); });
+let installEvt = null;
+const standalone = () => matchMedia('(display-mode: standalone)').matches;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (!standalone()) $('#installBox').hidden = false; });
+addEventListener('appinstalled', () => { $('#installBox').hidden = true; installEvt = null; say('Leaf is installed. .leaf files will now open in it with a double-click.'); });
+$('#installBtn').onclick = async () => { if (!installEvt) return; installEvt.prompt(); const r = await installEvt.userChoice; if (r.outcome === 'accepted') $('#installBox').hidden = true; installEvt = null; };
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 setMode('start');
 if (window.claude && claude.use) claude.use('downloads').then(d => { downloads = d; }).catch(() => {});
