@@ -380,8 +380,20 @@ function pdfPoint(e) {
 }
 const addAnn = (uid, a) => { if (['ink', 'rect', 'ell', 'line'].includes(a.t)) { a.c = a.c || $('#annColor').value; a.wd = a.wd || +$('#annWidth').value; } if (a.t === 'ul' || a.t === 'st') a.c = a.c || $('#annColor').value; if (a.t === 'hl') a.c = $('#hlColor').value; if (a.t === 'text') a.c = $('#annColor').value; snap(); a.id = 'a' + (++aidN); (annots[uid] = annots[uid] || []).push(a); drawOverlay(uid); };
 let draft = null, insPng = null, insSize = null;
+// On touch screens only drawing tools capture the finger; with every other tool a swipe scrolls and a tap acts.
+const DRAG_TOOLS = ['hl', 'ul', 'st', 'rect', 'ell', 'line', 'arrow', 'link', 'redact', 'field', 'ink'];
+let tap = null;
 $('#pdfPages').addEventListener('pointerdown', e => {
-  if (tool === 'none' || e.target.closest('.pf') || e.target.closest('.pedit')) return; const pt = pdfPoint(e); if (!pt) return; e.preventDefault();
+  if (tool === 'none' || e.target.closest('.pf') || e.target.closest('.pedit')) return; const pt = pdfPoint(e); if (!pt) return;
+  if (e.pointerType !== 'mouse' && !DRAG_TOOLS.includes(tool)) { tap = { pt, x: e.clientX, y: e.clientY, target: e.target, pointerId: e.pointerId }; return; }
+  e.preventDefault(); act(e, pt);
+});
+let tapped = false;
+$('#pdfPages').addEventListener('pointerup', e => { if (!tap) return; const t = tap; tap = null; if (Math.hypot(e.clientX - t.x, e.clientY - t.y) < 10) { tapped = true; act(t, t.pt); } });
+// Stop the phone's follow-up click from taking focus away from a text box the tap just opened.
+$('#pdfPages').addEventListener('touchend', e => { if (tapped) { tapped = false; if (!e.target.closest('.pedit')) e.preventDefault(); } }, { passive: false });
+$('#pdfPages').addEventListener('pointercancel', () => { tap = null; });
+function act(e, pt) {
   if (tool === 'edit') { startEdit(pt); return; }
   if (['hl', 'ul', 'st', 'rect', 'ell', 'line', 'arrow', 'link', 'redact', 'field'].includes(tool)) draft = { t: tool, uid: pt.uid, x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
   else if (tool === 'image') {
@@ -400,7 +412,7 @@ $('#pdfPages').addEventListener('pointerdown', e => {
     addAnn(pt.uid, { t: 'img', x: pt.x - w / 2, y: pt.y - h / 2, w, h, png: sigPng });
   }
   if (draft) e.target.closest('svg').setPointerCapture(e.pointerId);
-});
+}
 $('#pdfPages').addEventListener('pointermove', e => {
   if (!draft) return; const pt = pdfPoint(e); if (!pt || pt.uid !== draft.uid) return;
   if (draft.t === 'ink') draft.pts.push([pt.x, pt.y]); else { draft.x1 = pt.x; draft.y1 = pt.y; }
