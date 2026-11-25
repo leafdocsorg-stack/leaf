@@ -142,26 +142,34 @@ const onField = e => {
 };
 document.addEventListener('input', onField); document.addEventListener('change', onField);
 
+function arrowHead(x1, y1, x2, y2, L) { const ang = Math.atan2(y2 - y1, x2 - x1), sp = 0.45; return [[x2, y2], [x2 - L * Math.cos(ang - sp), y2 - L * Math.sin(ang - sp)], [x2 - L * Math.cos(ang + sp), y2 - L * Math.sin(ang + sp)]].map(q => q.join(',')).join(' '); }
 function drawOverlay(uid) {
   const svg = document.querySelector('svg.ov[data-uid="' + uid + '"]'), vp = vps[uid]; if (!svg || !vp) return;
   svg.setAttribute('viewBox', '0 0 ' + vp.width + ' ' + vp.height);
   const V = (x, y) => vp.convertToViewportPoint(x, y);
   const R = a => { const [x1, y1] = V(a.x, a.y), [x2, y2] = V(a.x + a.w, a.y + a.h); return { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) }; };
   let out = (annots[uid] || []).map(a => {
-    if (a.t === 'hl') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="#ffd633" fill-opacity=".35"/>'; }
+    if (a.t === 'hl') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="' + (a.c || '#ffd633') + '" fill-opacity=".4"/>'; }
     if (a.t === 'img') { const r = R(a); return '<image href="' + a.png + '" x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" preserveAspectRatio="none"/>'; }
     if (a.t === 'redact') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="#000" fill-opacity=".55" stroke="#d11" stroke-width="1.5"/>'; }
     if (a.t === 'newfield') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="#0b5d63" fill-opacity=".08" stroke="#0b5d63" stroke-dasharray="4 3"/><text x="' + (r.x + 4) + '" y="' + (r.y - 4) + '" font-size="11" fill="#0b5d63" font-family="Inter,sans-serif">' + esc(a.ft + ': ' + a.name) + '</text>'; }
     if (a.t === 'edit') { const r = R(editBox(a)), [bx, by] = V(a.x, a.by); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="' + a.bg + '"/><text x="' + bx + '" y="' + by + '" font-size="' + (a.size * vp.scale) + '" font-family=\'' + cssFam(a) + '\' font-weight="' + (a.bold ? 700 : 400) + '" font-style="' + (a.italic ? 'italic' : 'normal') + '" fill="' + a.fg + '" xml:space="preserve">' + esc(a.txt) + '</text>'; }
-    if (a.t === 'ul' || a.t === 'st') { const r = R(a), yy = a.t === 'ul' ? r.y + r.h : r.y + r.h / 2; return '<line x1="' + r.x + '" x2="' + (r.x + r.w) + '" y1="' + yy + '" y2="' + yy + '" stroke="#d11" stroke-width="1.5"/>'; }
-    if (a.t === 'rect') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="none" stroke="#0b5d63" stroke-width="1.6"/>'; }
-    if (a.t === 'ink') return '<polyline fill="none" stroke="#0b5d63" stroke-width="' + (1.6 * vp.scale) + '" stroke-linecap="round" stroke-linejoin="round" points="' + a.pts.map(pt => V(pt[0], pt[1]).join(',')).join(' ') + '"/>';
-    if (a.t === 'text') { const [x, y] = V(a.x, a.y); return '<text x="' + x + '" y="' + y + '" font-size="' + (a.s * vp.scale) + '" font-family="Helvetica,Arial,sans-serif" fill="#111">' + esc(a.txt) + '</text>'; }
+    if (a.t === 'ul' || a.t === 'st') { const r = R(a), yy = a.t === 'ul' ? r.y + r.h : r.y + r.h / 2; return '<line x1="' + r.x + '" x2="' + (r.x + r.w) + '" y1="' + yy + '" y2="' + yy + '" stroke="' + (a.c || '#d11') + '" stroke-width="1.5"/>'; }
+    if (a.t === 'rect') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="none" stroke="' + (a.c || '#0b5d63') + '" stroke-width="' + ((a.wd || 1.6) * vp.scale) + '"/>'; }
+    if (a.t === 'ell') { const r = R(a); return '<ellipse cx="' + (r.x + r.w / 2) + '" cy="' + (r.y + r.h / 2) + '" rx="' + (r.w / 2) + '" ry="' + (r.h / 2) + '" fill="none" stroke="' + (a.c || '#0b5d63') + '" stroke-width="' + ((a.wd || 1.6) * vp.scale) + '"/>'; }
+    if (a.t === 'line') { const [x1, y1] = V(a.x0, a.y0), [x2, y2] = V(a.x1, a.y1); let o = '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="' + (a.c || '#0b5d63') + '" stroke-width="' + ((a.wd || 1.6) * vp.scale) + '" stroke-linecap="round"/>'; if (a.arrow) { const h = arrowHead(x1, y1, x2, y2, 9 + (a.wd || 1.6) * 2 * vp.scale); o += '<polygon points="' + h + '" fill="' + (a.c || '#0b5d63') + '"/>'; } return o; }
+    if (a.t === 'link') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="#2a6fdb" fill-opacity=".12" stroke="#2a6fdb" stroke-dasharray="3 2"/>'; }
+    if (a.t === 'note') { const [x, y] = V(a.x, a.y); return '<g><rect x="' + x + '" y="' + (y - 18) + '" width="18" height="18" rx="2" fill="#ffd633" stroke="#a88400"/><text x="' + (x + 9) + '" y="' + (y - 5) + '" font-size="12" text-anchor="middle" fill="#6b5300" font-family="Helvetica,Arial,sans-serif">i</text><title>' + esc(a.txt) + '</title></g>'; }
+    if (a.t === 'stamp') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="none" stroke="' + a.c + '" stroke-width="' + (2.5 * vp.scale) + '" rx="' + (4 * vp.scale) + '"/><text x="' + (r.x + r.w / 2) + '" y="' + (r.y + r.h / 2) + '" dy=".35em" text-anchor="middle" font-size="' + (a.fs * vp.scale) + '" font-weight="700" font-family="Helvetica,Arial,sans-serif" fill="' + a.c + '">' + esc(a.label) + '</text>'; }
+    if (a.t === 'ink') return '<polyline fill="none" stroke="' + (a.c || '#0b5d63') + '" stroke-width="' + ((a.wd || 1.6) * vp.scale) + '" stroke-linecap="round" stroke-linejoin="round" points="' + a.pts.map(pt => V(pt[0], pt[1]).join(',')).join(' ') + '"/>';
+    if (a.t === 'text') { const [x, y] = V(a.x, a.y); return '<text x="' + x + '" y="' + y + '" font-size="' + (a.s * vp.scale) + '" font-family="Helvetica,Arial,sans-serif" fill="' + (a.c || '#111') + '">' + esc(a.txt) + '</text>'; }
     return '';
   }).join('');
+  { const pg = pages.find(q => q.uid === uid); if (pg && pg.crop) { const c = pg.crop, pgo = srcs[pg.src].doc, W = vp.width, H = vp.height, k = vp.scale; const sh = (x, y, w, h) => w > 0 && h > 0 ? '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="#000" fill-opacity=".38"/>' : ''; out += sh(0, 0, c.l * k, H) + sh(W - c.r * k, 0, c.r * k, H) + sh(c.l * k, 0, W - (c.l + c.r) * k, c.t * k) + sh(c.l * k, H - c.b * k, W - (c.l + c.r) * k, c.b * k); } }
   out += stampPreview(uid, vp);
   if (draft && draft.uid === uid) {
     if (draft.t === 'ink') out += '<polyline fill="none" stroke="#0b5d63" stroke-width="2" points="' + draft.pts.map(pt => V(pt[0], pt[1]).join(',')).join(' ') + '"/>';
+    else if (draft.t === 'line' || draft.t === 'arrow') { const [x1, y1] = V(draft.x0, draft.y0), [x2, y2] = V(draft.x1, draft.y1); out += '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="#0b5d63" stroke-width="2" stroke-dasharray="4 3"/>'; }
     else { const [x1, y1] = V(draft.x0, draft.y0), [x2, y2] = V(draft.x1, draft.y1); const col = draft.t === 'redact' ? '#d11' : draft.t === 'field' ? '#0b5d63' : '#c9a400'; out += '<rect x="' + Math.min(x1, x2) + '" y="' + Math.min(y1, y2) + '" width="' + Math.abs(x2 - x1) + '" height="' + Math.abs(y2 - y1) + '" fill="' + col + '" fill-opacity=".15" stroke="' + col + '" stroke-dasharray="4 3"/>'; }
   }
   svg.innerHTML = out;
@@ -190,7 +198,7 @@ function setTool(t) {
   tool = t;
   document.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t));
   $('#pdfPages').dataset.tool = t;
-  const hints = { none: 'Pick a tool, then work on the page. Form fields can be typed into directly.', edit: 'Click any line of text on the page, then type to change it. Enter to apply, Esc to cancel.', ul: 'Drag across text to underline it.', st: 'Drag across text to strike it through.', rect: 'Drag to draw a box.', image: insPng ? 'Click where the image goes.' : 'Choose an image first.', hl: 'Drag across text to highlight it.', ink: 'Draw freely on the page.', text: 'Type your text below, then click where it goes.', sign: sigPng ? 'Click where your signature goes.' : 'Create your signature in the Sign tab first.', redact: 'Drag over anything to remove. It is permanently removed when you save.', field: 'Drag a box where the new field goes.' };
+  const hints = { none: 'Pick a tool, then work on the page. Form fields can be typed into directly.', edit: 'Click any line of text on the page, then type to change it. Enter to apply, Esc to cancel.', ul: 'Drag across text to underline it.', st: 'Drag across text to strike it through.', rect: 'Drag to draw a box.', image: insPng ? 'Click where the image goes.' : 'Choose an image first.', hl: 'Drag across text to highlight it.', ell: 'Drag to draw an oval.', line: 'Drag to draw a line.', arrow: 'Drag from the tail to the point of the arrow.', link: 'Drag a box over the text or image that should open the link.', note: 'Type the note, then click where its pin goes.', stamp: 'Click where the stamp goes.',  ink: 'Draw freely on the page.', text: 'Type your text below, then click where it goes.', sign: sigPng ? 'Click where your signature goes.' : 'Create your signature in the Sign tab first.', redact: 'Drag over anything to remove. It is permanently removed when you save.', field: 'Drag a box where the new field goes.' };
   $('#toolHint').textContent = hints[t] || ''; if ($('#editHint')) $('#editHint').textContent = t === 'edit' ? hints.edit : ''; $('#redactHint').textContent = t === 'redact' ? hints.redact : ''; $('#fieldHint').textContent = t === 'field' ? hints.field : '';
 }
 
@@ -300,16 +308,22 @@ function pdfPoint(e) {
   const [x, y] = vp.convertToPdfPoint((e.clientX - r.left) * vp.width / r.width, (e.clientY - r.top) * vp.height / r.height);
   return { uid, x, y };
 }
-const addAnn = (uid, a) => { snap(); a.id = 'a' + (++aidN); (annots[uid] = annots[uid] || []).push(a); drawOverlay(uid); };
+const addAnn = (uid, a) => { if (['ink', 'rect', 'ell', 'line'].includes(a.t)) { a.c = a.c || $('#annColor').value; a.wd = a.wd || +$('#annWidth').value; } if (a.t === 'ul' || a.t === 'st') a.c = a.c || $('#annColor').value; if (a.t === 'hl') a.c = $('#hlColor').value; if (a.t === 'text') a.c = $('#annColor').value; snap(); a.id = 'a' + (++aidN); (annots[uid] = annots[uid] || []).push(a); drawOverlay(uid); };
 let draft = null, insPng = null, insSize = null;
 $('#pdfPages').addEventListener('pointerdown', e => {
   if (tool === 'none' || e.target.closest('.pf') || e.target.closest('.pedit')) return; const pt = pdfPoint(e); if (!pt) return; e.preventDefault();
   if (tool === 'edit') { startEdit(pt); return; }
-  if (['hl', 'ul', 'st', 'rect', 'redact', 'field'].includes(tool)) draft = { t: tool, uid: pt.uid, x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
+  if (['hl', 'ul', 'st', 'rect', 'ell', 'line', 'arrow', 'link', 'redact', 'field'].includes(tool)) draft = { t: tool, uid: pt.uid, x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
   else if (tool === 'image') {
     if (!insPng) { say('Choose an image first.'); return; }
     const w = Math.min(220, insSize.w), h = w * insSize.h / insSize.w;
     addAnn(pt.uid, { t: 'img', x: pt.x - w / 2, y: pt.y - h / 2, w, h, png: insPng });
+  } else if (tool === 'note') {
+    const txt = $('#annText').value.trim(); if (!txt) { $('#annText').focus(); say('Type the note text first, then click on the page.'); return; }
+    addAnn(pt.uid, { t: 'note', x: pt.x, y: pt.y, txt });
+  } else if (tool === 'stamp') {
+    const [label, c] = $('#stampSel').value.split('|'), fs = 22, cx = document.createElement('canvas').getContext('2d'); cx.font = 'bold ' + fs + 'px Helvetica,Arial,sans-serif';
+    const w = cx.measureText(label).width + 26, h = fs + 18; addAnn(pt.uid, { t: 'stamp', x: pt.x - w / 2, y: pt.y - h / 2, w, h, label, c, fs });
   } else if (tool === 'ink') draft = { t: 'ink', uid: pt.uid, pts: [[pt.x, pt.y]] };
   else if (tool === 'text') {
     const txt = $('#annText').value.trim(); if (!txt) { $('#annText').focus(); say('Type the text first, then click on the page.'); return; }
@@ -336,6 +350,12 @@ $('#pdfPages').addEventListener('pointerup', () => {
     const options = ft === 'dropdown' ? $('#nfOptions').value.split(',').map(s => s.trim()).filter(Boolean) : [];
     if (ft === 'dropdown' && !options.length) { say('Add the dropdown options first, separated by commas.'); drawOverlay(d.uid); return; }
     addAnn(d.uid, { t: 'newfield', ...box, ft, name: n, options }); $('#nfName').value = '';
+  }
+  else if ((d.t === 'line' || d.t === 'arrow') && Math.hypot(d.x1 - d.x0, d.y1 - d.y0) > 4) addAnn(d.uid, { t: 'line', x0: d.x0, y0: d.y0, x1: d.x1, y1: d.y1, arrow: d.t === 'arrow' });
+  else if (d.t === 'ell' && box.w > 3 && box.h > 3) addAnn(d.uid, { t: 'ell', ...box });
+  else if (d.t === 'link' && box.w > 6 && box.h > 6) {
+    let url = $('#linkUrl').value.trim(); if (!url) { say('Type the link address first (for example https://example.com), then drag a box.'); drawOverlay(d.uid); return; }
+    if (!/^(https?:|mailto:)/i.test(url)) url = 'https://' + url; addAnn(d.uid, { t: 'link', ...box, url });
   }
   else if (d.t === 'ink' && d.pts.length > 1) addAnn(d.uid, { t: 'ink', pts: d.pts });
   else drawOverlay(d.uid);
@@ -515,16 +535,31 @@ async function build(list) {
   for (let i = 0; i < list.length; i++) {
     const p = list[i], pg = outPages[i];
     if (p.rot) pg.setRotation(degrees((pg.getRotation().angle + p.rot) % 360));
+    if (p.crop) { const mb = pg.getMediaBox(), c = p.crop; pg.setCropBox(mb.x + c.l, mb.y + c.b, mb.width - c.l - c.r, mb.height - c.t - c.b); }
     for (const a of annots[p.uid] || []) {
-      if (a.t === 'hl') pg.drawRectangle({ x: a.x, y: a.y, width: a.w, height: a.h, color: rgb(1, 0.84, 0.2), opacity: 0.35 });
-      else if (a.t === 'ul' || a.t === 'st') { const yy = a.t === 'ul' ? a.y : a.y + a.h / 2; pg.drawLine({ start: { x: a.x, y: yy }, end: { x: a.x + a.w, y: yy }, thickness: 1.2, color: rgb(0.8, 0.07, 0.07) }); }
-      else if (a.t === 'rect') pg.drawRectangle({ x: a.x, y: a.y, width: a.w, height: a.h, borderColor: rgb(0.04, 0.36, 0.39), borderWidth: 1.4 });
+      if (a.t === 'hl') pg.drawRectangle({ x: a.x, y: a.y, width: a.w, height: a.h, color: hexRgb(a.c || '#ffd633'), opacity: 0.4 });
+      else if (a.t === 'ul' || a.t === 'st') { const yy = a.t === 'ul' ? a.y : a.y + a.h / 2; pg.drawLine({ start: { x: a.x, y: yy }, end: { x: a.x + a.w, y: yy }, thickness: 1.2, color: hexRgb(a.c || '#d11111') }); }
+      else if (a.t === 'ell') pg.drawEllipse({ x: a.x + a.w / 2, y: a.y + a.h / 2, xScale: a.w / 2, yScale: a.h / 2, borderColor: hexRgb(a.c || '#0b5d63'), borderWidth: a.wd || 1.6 });
+      else if (a.t === 'line') {
+        const col = hexRgb(a.c || '#0b5d63'), wd = a.wd || 1.6; pg.drawLine({ start: { x: a.x0, y: a.y0 }, end: { x: a.x1, y: a.y1 }, thickness: wd, color: col });
+        if (a.arrow) { const L = 9 + wd * 2, ang = Math.atan2(a.y1 - a.y0, a.x1 - a.x0), sp = 0.45; for (const sg of [-1, 1]) pg.drawLine({ start: { x: a.x1, y: a.y1 }, end: { x: a.x1 - L * Math.cos(ang + sg * sp), y: a.y1 - L * Math.sin(ang + sg * sp) }, thickness: wd, color: col }); }
+      }
+      else if (a.t === 'stamp') { const col = hexRgb(a.c), fb = await out.embedFont(StandardFonts.HelveticaBold); pg.drawRectangle({ x: a.x, y: a.y, width: a.w, height: a.h, borderColor: col, borderWidth: 2.5 }); const tw = fb.widthOfTextAtSize(a.label, a.fs); pg.drawText(a.label, { x: a.x + (a.w - tw) / 2, y: a.y + (a.h - a.fs * 0.72) / 2, size: a.fs, font: fb, color: col }); }
+      else if (a.t === 'link' || a.t === 'note') {
+        try {
+          const ctx = out.context, N = PDFLib.PDFName, S = PDFLib.PDFString;
+          const d = a.t === 'link' ? { Type: 'Annot', Subtype: 'Link', Rect: [a.x, a.y, a.x + a.w, a.y + a.h], Border: [0, 0, 0], A: ctx.obj({ Type: 'Action', S: 'URI', URI: S.of(a.url) }) }
+            : { Type: 'Annot', Subtype: 'Text', Rect: [a.x, a.y - 18, a.x + 18, a.y], Contents: PDFLib.PDFHexString.fromText(a.txt), Name: 'Comment', C: [1, 0.84, 0.2], F: 4 };
+          pg.node.addAnnot(ctx.register(ctx.obj(d)));
+        } catch (e) { console.warn('annotation', e); }
+      }
+      else if (a.t === 'rect') pg.drawRectangle({ x: a.x, y: a.y, width: a.w, height: a.h, borderColor: hexRgb(a.c || '#0b5d63'), borderWidth: a.wd || 1.4 });
       else if (a.t === 'edit') {
         const eb = editBox(a), f = await efont(a); pg.drawRectangle({ x: eb.x, y: eb.y, width: eb.w, height: eb.h, color: hexRgb(a.bg), borderWidth: 0 });
         const t = safeText(f, a.txt); if (t) pg.drawText(t, { x: a.x, y: a.by, size: a.size, font: f, color: hexRgb(a.fg) });
       }
-      else if (a.t === 'ink') for (let k = 1; k < a.pts.length; k++) pg.drawLine({ start: { x: a.pts[k - 1][0], y: a.pts[k - 1][1] }, end: { x: a.pts[k][0], y: a.pts[k][1] }, thickness: 1.6, color: rgb(0.04, 0.36, 0.39) });
-      else if (a.t === 'text') pg.drawText(a.txt, { x: a.x, y: a.y, size: a.s, font, color: rgb(0.07, 0.07, 0.07) });
+      else if (a.t === 'ink') for (let k = 1; k < a.pts.length; k++) pg.drawLine({ start: { x: a.pts[k - 1][0], y: a.pts[k - 1][1] }, end: { x: a.pts[k][0], y: a.pts[k][1] }, thickness: a.wd || 1.6, color: hexRgb(a.c || '#0b5d63') });
+      else if (a.t === 'text') pg.drawText(a.txt, { x: a.x, y: a.y, size: a.s, font, color: hexRgb(a.c || '#111111') });
       else if (a.t === 'img') { imgs[a.png] = imgs[a.png] || await out.embedPng(a.png); pg.drawImage(imgs[a.png], { x: a.x, y: a.y, width: a.w, height: a.h }); }
       else if (a.t === 'ocr') { let size = Math.max(4, a.h * 0.8); const w = font.widthOfTextAtSize(a.txt, size); if (w > 0) size = Math.max(2, size * Math.min(1.3, a.w / w)); try { pg.drawText(a.txt, { x: a.x, y: a.y + a.h * 0.15, size, font, opacity: 0 }); } catch (e) {} }
       else if (a.t === 'newfield') newFields.push({ pg, a });
@@ -534,6 +569,9 @@ async function build(list) {
       const size = 60, tw = fontB.widthOfTextAtSize(stamps.wm, size), cx = bx + bw / 2, cy = by + bh / 2, r = Math.PI / 4;
       pg.drawText(stamps.wm, { x: cx - (tw / 2) * Math.cos(r) + (size / 3) * Math.sin(r), y: cy - (tw / 2) * Math.sin(r) - (size / 3) * Math.cos(r), size, font: fontB, color: rgb(0.47, 0.47, 0.47), opacity: stamps.wmOpacity, rotate: degrees(45) });
     }
+    { const hf = { t: ['hfL', 'hfC', 'hfR'].map(id => $('#' + id).value), b: ['ffL', 'ffC', 'ffR'].map(id => $('#' + id).value) };
+      const fill = t => t.replace(/\{n\}/g, i + 1).replace(/\{total\}/g, list.length).replace(/\{date\}/g, new Date().toLocaleDateString());
+      for (const [row, yy] of [['t', by + bh - 30], ['b', by + 30]]) hf[row].forEach((t, k) => { if (!t.trim()) return; const tx = fill(t), tw = font.widthOfTextAtSize(tx, 9), x = k === 0 ? bx + 36 : k === 1 ? bx + (bw - tw) / 2 : bx + bw - 36 - tw; pg.drawText(safeText(font, tx), { x, y: yy, size: 9, font, color: rgb(0.2, 0.2, 0.2) }); }); }
     for (const s of stampTexts(i, list.length)) {
       const size = 9, tw = font.widthOfTextAtSize(s.s, size), y = by + 22 - size * 0.3;
       if (s.k === 'bates') pg.drawText(s.s, { x: bx + bw - 36 - tw, y, size, font, color: rgb(0.13, 0.13, 0.13) });
@@ -555,9 +593,11 @@ async function build(list) {
   if (!anyRedact || $('#infoTitle').value || $('#infoAuthor').value || $('#infoSubject').value) { if ($('#infoTitle').value) out.setTitle($('#infoTitle').value); if ($('#infoAuthor').value) out.setAuthor($('#infoAuthor').value); if ($('#infoSubject').value) out.setSubject($('#infoSubject').value); }
   out.setProducer('Leaf Viewer (open source)');
   let bytes = await out.save({ useObjectStreams: true });
-  const pw = $('#pwSet').value;
-  if (pw) {
-    const r = await qpdf(['--encrypt', pw, pw + '-owner-' + Math.random().toString(36).slice(2), '256', '--', '/in.pdf', '/out.pdf'], bytes);
+  const pw = $('#pwSet').value, restrict = !$('#permPrint').checked || !$('#permCopy').checked || !$('#permEdit').checked;
+  if ($('#compress').checked && !pw && !restrict) { const r = await qpdf(['--recompress-flate', '--compression-level=9', '--object-streams=generate', '/in.pdf', '/out.pdf'], bytes); if (r.out && r.out.length < bytes.length) bytes = r.out; }
+  if (pw || restrict) {
+    const flags = ['--print=' + ($('#permPrint').checked ? 'full' : 'none'), '--extract=' + ($('#permCopy').checked ? 'y' : 'n'), '--modify=' + ($('#permEdit').checked ? 'all' : 'none')];
+    const r = await qpdf(['--encrypt', pw, 'o' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2), '256', ...flags, '--', '/in.pdf', '/out.pdf'], bytes);
     if (r.code !== 0 || !r.out) throw new Error('password protection failed');
     bytes = r.out;
   }
@@ -597,6 +637,54 @@ $('#extractTxt').onclick = async () => {
   } catch (err) { busy(''); say('Could not extract text: ' + err.message); }
 };
 const TABTOOL = { pedit: 'edit', predact: 'redact', pfield: 'none' };
+
+/* ---------- find & replace, pages, crop, convert ---------- */
+$('#frGo').onclick = async () => {
+  const f = $('#frFind').value, r = $('#frWith').value; if (!f) { say('Type the text to find.'); return; }
+  const re = new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); let n = 0; snap();
+  for (const p of pages) {
+    const runs = await runsFor(p.uid);
+    for (const run of runs) {
+      if (!re.test(run.str)) { re.lastIndex = 0; continue; } re.lastIndex = 0;
+      if (covered(p.uid, run)) continue;
+      const txt = run.str.replace(re, () => { n++; return r; }), cols = sampleColors(p.uid, run);
+      (annots[p.uid] = annots[p.uid] || []).push({ id: 'a' + (++aidN), t: 'edit', x: run.x, by: run.y, w: run.w, size: run.size, orig: run.str, txt, bg: cols.bg, fg: cols.fg, fam: run.fam, bold: run.bold, italic: run.italic });
+    }
+    drawOverlay(p.uid);
+  }
+  if (!n) undo.pop();
+  $('#frResult').textContent = n ? 'Replaced ' + n + ' match' + (n === 1 ? '' : 'es') + '. Press Save PDF to keep them.' : 'No matches found.';
+};
+async function newPdfSource(make, name) {
+  const { PDFDocument } = PDFLib, d = await PDFDocument.create(); await make(d); return d.save();
+}
+$('#blankPg').onclick = async () => {
+  try {
+    const first = srcs[0].doc, pg1 = await first.getPage(1), v = pg1.view, w = v[2] - v[0], h = v[3] - v[1];
+    const bytes = await newPdfSource(async d => { d.addPage([w, h]); }, 'Blank page'); snap();
+    let at = pages.map(p => p.sel).lastIndexOf(true); at = at < 0 ? pages.length - 1 : at;
+    const before = pages.length; await addSource(bytes, 'Blank page'); const added = pages.splice(before, 1)[0]; pages.splice(at + 1, 0, added); renderAll();
+  } catch (err) { say('Could not add a blank page: ' + err.message); }
+};
+$('#imgToPdf').onchange = async e => {
+  const files = [...e.target.files]; e.target.value = ''; if (!files.length) return;
+  try {
+    snap();
+    for (const f of files) {
+      const url = URL.createObjectURL(f), im = new Image(); im.src = url; await im.decode();
+      const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; c.getContext('2d').drawImage(im, 0, 0); URL.revokeObjectURL(url);
+      const png = await new Promise(r => c.toBlob(b => b.arrayBuffer().then(r), 'image/png')), sc = Math.min(1, 612 / im.width, 792 / im.height);
+      const bytes = await newPdfSource(async d => { const img = await d.embedPng(png), pg = d.addPage([im.width * sc, im.height * sc]); pg.drawImage(img, { x: 0, y: 0, width: im.width * sc, height: im.height * sc }); }, f.name);
+      await addSource(bytes, f.name);
+    }
+    renderAll(); say('Added ' + files.length + (files.length === 1 ? ' image' : ' images') + ' as pages at the end.');
+  } catch (err) { say('Could not add the image: ' + err.message); }
+};
+$('#cropApply').onclick = () => {
+  const m = { l: +$('#cropL').value || 0, r: +$('#cropR').value || 0, t: +$('#cropT').value || 0, b: +$('#cropB').value || 0 }, sel = pages.filter(p => p.sel), tgt = sel.length ? sel : pages; snap();
+  tgt.forEach(p => { p.crop = (m.l || m.r || m.t || m.b) ? { ...m } : undefined; }); renderAll();
+  $('#cropNote').textContent = (m.l || m.r || m.t || m.b) ? 'Cropping ' + tgt.length + (tgt.length === 1 ? ' page' : ' pages') + ' (shaded area is removed when you save).' : 'Cropping cleared.';
+};
 async function saveBytes(bytes, name) { await window.LeafApp.offer(name, bytes); }
 $('#savePdfBtn').onclick = async () => {
   try { busy('Building your PDF…'); const bytes = await build(pages); busy(''); await saveBytes(bytes, base() + '-edited.pdf'); }
