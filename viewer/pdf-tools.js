@@ -34,7 +34,7 @@ async function open(bytes, name) {
   await addSource(bytes, name);
   await readFields();
   window.LeafApp.setMode('pdf', fileName);
-  setTool('none'); renderAll(); renderFields(); syncStampUI();
+  document.querySelector('#pdfMain [data-tab="pedit"]').click(); renderAll(); renderFields(); syncStampUI();
   return true;
 }
 async function unlockIfNeeded(bytes, name) {
@@ -360,7 +360,7 @@ $('#pdfPages').addEventListener('pointerup', () => {
   else if (d.t === 'ink' && d.pts.length > 1) addAnn(d.uid, { t: 'ink', pts: d.pts });
   else drawOverlay(d.uid);
 });
-document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(tool === b.dataset.tool ? 'none' : b.dataset.tool));
 document.querySelectorAll('.undoBtn').forEach(b => b.onclick = () => { const s = undo.pop(); if (!s) return; const o = JSON.parse(s); pages = o.pages; annots = o.annots; renderAll(); });
 $('#nfType').onchange = () => { $('#nfOptWrap').hidden = $('#nfType').value !== 'dropdown'; };
 
