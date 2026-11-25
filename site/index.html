@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Leaf: edit, fill and sign PDFs free in your browser</title>
-<meta name="description" content="Edit text in a PDF, fill forms, sign, highlight and merge pages. Free, no account, and your file never leaves your computer.">
+<title>Leaf: the open document format to replace PDF</title>
+<meta name="description" content="Leaf is a free, open-source document format that looks the same everywhere like a PDF, but stays editable and signable. Open and edit .leaf and .pdf files in your browser.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
-<meta property="og:title" content="Leaf: edit, fill and sign PDFs free in your browser">
-<meta property="og:description" content="Edit text, fill forms, sign and merge PDFs. Free, no account, private.">
+<meta property="og:title" content="Leaf: the open document format to replace PDF">
+<meta property="og:description" content="A free, open-source document format to replace PDF. Editable, signable, readable anywhere. Try it in your browser.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://leafdocs.org/">
 <link rel="canonical" href="https://leafdocs.org/">
@@ -16,52 +16,58 @@
 <body>
 <header class="top"><div class="wrap">
   <a class="brand" href="/"><img src="favicon.svg" alt="" width="26" height="26">Leaf</a>
-  <nav><a href="/app/">Edit a PDF</a><a href="/developers/">For developers</a></nav>
+  <nav><a href="/app/">Open editor</a><a href="/spec/">Spec</a><a href="https://github.com/leafdocsorg-stack/leaf">GitHub</a></nav>
 </div></header>
 
 <main class="wrap">
 <div class="hero">
-  <h1>Edit your PDF, free.</h1>
-  <p class="lede">Change text, fill in forms, add your signature, highlight and rearrange pages. Right in your browser, with no account.</p>
-  <div class="btns"><a class="btn primary xl" href="/app/">Edit a PDF</a></div>
-  <p class="note">Your file never leaves your computer. Nothing is uploaded.</p>
+  <p class="eyebrow">Free and open source</p>
+  <h1>Leaf: the open document format to replace PDF.</h1>
+  <p class="lede">A Leaf file looks the same on every device, like a PDF. But it stays editable, fillable and signable, with no paid software. Anyone can read the code and the spec.</p>
+  <div class="btns">
+    <a class="btn primary xl" href="/app/">Try Leaf in your browser</a>
+    <a class="btn xl" href="https://github.com/leafdocsorg-stack/leaf">View source on GitHub</a>
+  </div>
+  <p class="note">Opens <code>.leaf</code> and <code>.pdf</code> files. It runs in your browser, so nothing is uploaded.</p>
 </div>
 
 <section>
-  <h2>How it works</h2>
+  <h2>Why replace PDF?</h2>
+  <p>PDF was made for printing. Editing one is painful, and signing one usually means a paid service. Leaf keeps what makes PDF dependable, the same pages everywhere, and adds what it lacks.</p>
+  <ul class="plain">
+    <li><b>Edit like a normal document.</b> Change the text and the pages re-flow.</li>
+    <li><b>Fill and sign without a service.</b> Anyone can check a signature and see whether the file changed.</li>
+    <li><b>Open to everyone.</b> A Leaf file is a plain ZIP of readable JSON, and the spec is public.</li>
+    <li><b>Works with PDF.</b> Open a PDF, and export any Leaf file to PDF whenever you need to.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Try it</h2>
   <ol class="how">
-    <li><b>Open your PDF</b><span>Choose it from your computer, or drop it on the page.</span></li>
-    <li><b>Click and change it</b><span>Click any text to retype it. Use the tools on the left to sign, highlight or fill in a form.</span></li>
-    <li><b>Save</b><span>Download the finished file when you are happy with it.</span></li>
+    <li><b>Open the editor</b><span>Choose a Leaf or PDF file, or start a new Leaf document.</span></li>
+    <li><b>Click the text to change it</b><span>Signing, highlighting and forms are in the bar on the left.</span></li>
+    <li><b>Save</b><span>Leaf files save as <code>.leaf</code>. You can also save a PDF copy.</span></li>
   </ol>
+  <p class="note">Leaf is version 0.1, an early draft. The format may still change, so do not rely on it yet for documents that must stay readable for years. Signatures use demo keys for now, so do not use them for legal signing.</p>
 </section>
 
 <section>
-  <h2>What you can do</h2>
-  <div class="grid">
-    <div><h3>Edit text</h3><p>Click a line and type to change it.</p></div>
-    <div><h3>Fill and sign</h3><p>Fill in forms and draw or type your signature.</p></div>
-    <div><h3>Mark up</h3><p>Highlight, underline, draw, add notes and stamps.</p></div>
-    <div><h3>Organise pages</h3><p>Merge files, delete, rotate, reorder or split pages.</p></div>
-    <div><h3>Black out and protect</h3><p>Permanently hide private details, or add a password.</p></div>
-    <div><h3>Scan to text</h3><p>Make scanned pages searchable and copyable.</p></div>
-  </div>
-</section>
-
-<section class="cta">
-  <h2>Ready?</h2>
-  <div class="btns"><a class="btn primary xl" href="/app/">Edit a PDF</a></div>
-</section>
-
-<section>
-  <h2>About Leaf</h2>
-  <p>Leaf is free and open source. It is also a new open document format that works like a PDF but stays editable. If you build software, see <a href="/developers/">Leaf for developers</a>.</p>
+  <h2>Open source</h2>
+  <p>The code and the format are public. Read them, run your own copy, report a bug or help shape the spec.</p>
+  <table>
+    <tr><th>What</th><th>Licence</th></tr>
+    <tr><td>Format specification</td><td>CC BY 4.0</td></tr>
+    <tr><td>Core library</td><td>Apache 2.0</td></tr>
+    <tr><td>Editor app</td><td>AGPL-3.0</td></tr>
+  </table>
+  <p><a href="/spec/">Read the spec</a> · <a href="https://github.com/leafdocsorg-stack/leaf">Source code</a> · <a href="https://github.com/leafdocsorg-stack/leaf/issues">Give feedback</a> · <a href="/developers/">For developers</a> · <a href="mailto:hello@leafdocs.org">hello@leafdocs.org</a></p>
 </section>
 </main>
 
 <footer><div class="wrap">
-  <span>Leaf</span>
-  <span><a href="/app/">Edit a PDF</a> · <a href="/developers/">For developers</a> · <a href="https://github.com/leafdocsorg-stack/leaf">GitHub</a> · <a href="mailto:hello@leafdocs.org">Contact</a></span>
+  <span>Leaf, the Living Editable Authenticated Format</span>
+  <span><a href="/app/">Editor</a> · <a href="/spec/">Spec</a> · <a href="https://github.com/leafdocsorg-stack/leaf">GitHub</a> · <a href="/developers/">Developers</a> · <a href="mailto:hello@leafdocs.org">Contact</a></span>
 </div></footer>
 </body>
 </html>
