@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Leaf for developers: the open document format</title>
+<meta name="description" content="Leaf is an open, free document format that looks the same everywhere like a PDF, but stays editable, fillable and signable in any browser.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<meta property="og:title" content="Leaf for developers: the open document format">
+<meta property="og:description" content="View, edit, fill and sign documents in any browser. Free, open source, no account.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://leafdocs.org/developers/">
+<link rel="canonical" href="https://leafdocs.org/developers/">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="/"><img src="/favicon.svg" alt="" width="26" height="26">Leaf</a>
+  <nav><a href="/app/">Edit a PDF</a><a href="/developers/">For developers</a><a href="/spec/">Spec</a><a href="https://github.com/leafdocsorg-stack/leaf">GitHub</a></nav>
+</div></header>
+<main class="wrap">
+<div class="hero" style="padding-bottom:40px">
+  <h1>Leaf for developers</h1>
+  <p class="lede">Leaf is an open document format meant to replace PDF. It looks the same on every device, but keeps real content inside, so it stays editable, fillable and signable.</p>
+  <div class="btns"><a class="btn primary" href="/spec/">Read the spec</a><a class="btn" href="https://github.com/leafdocsorg-stack/leaf">View on GitHub</a><a class="btn" href="/app/">Open the editor</a></div>
+</div>
+<section>
+  <h2>Why a new format</h2>
+  <p>PDF was built for printing. Inside, it is mostly instructions to draw text at fixed positions, which is why it is reliable to view and painful to edit. Signing usually means a paid service.</p>
+  <p>Leaf keeps the reliability and stores what the document means: headings, paragraphs, tables and form fields. Pages are laid out from that content and sealed, so every viewer draws the same page.</p>
+</section>
+
+<section>
+  <h2>What you can do</h2>
+  <div class="grid">
+    <div><h3>Edit like a doc</h3><p>Change the text and the pages re-flow on their own.</p></div>
+    <div><h3>Fill forms</h3><p>Form fields are part of the file, not drawn on top of it.</p></div>
+    <div><h3>Seal and sign</h3><p>Anyone can check a signature and see whether anything changed since, with no signing service.</p></div>
+    <div><h3>Export to PDF</h3><p>Every Leaf file exports to a standard PDF, and PDFs can be opened in the viewer too.</p></div>
+    <div><h3>Inspect everything</h3><p>A Leaf file is a ZIP of plain JSON. Open it and read the content, layout and edit history.</p></div>
+    <div><h3>A full PDF toolkit</h3><p>Annotate, fill, merge, split, redact, add watermarks, run OCR and set passwords on ordinary PDFs.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>How a file is built</h2>
+  <p>A <code>.leaf</code> file is a ZIP package with a hash for every part:</p>
+<pre><code>mimetype                application/vnd.leaf+zip
+manifest.json           version, parts, SHA-256 of each part
+content/document.json   the content as a tree of blocks
+content/styles.json     page size, margins, styles
+layout/pages.json       sealed page layout
+data/values.json        form answers
+history/changes.jsonl   edit log
+versions/               sealed versions
+signatures/             signatures over sealed versions</code></pre>
+  <p>The <a href="/spec/">specification</a> describes each part, the security model and how PDF import and export work.</p>
+</section>
+
+<section>
+  <h2>Try it</h2>
+  <p>Open the <a href="/app/">viewer</a> and load your own <code>.leaf</code> or <code>.pdf</code>, or <a href="/samples/lease-sample.leaf">download a sample Leaf file</a> to open in it. In Chrome or Edge you can install the viewer as an app that opens <code>.leaf</code> and <code>.pdf</code> files when you double-click them.</p>
+</section>
+
+<section>
+  <h2>Status</h2>
+  <p>Leaf is at version 0.1, a draft for public discussion. The format may still change, so do not use it yet for anything that must stay readable for years. Signatures in the viewer use demo keys while key handling is designed; do not rely on them for legal signing.</p>
+  <p>Feedback on the spec is the most useful contribution right now. Open an issue on <a href="https://github.com/leafdocsorg-stack/leaf/issues">GitHub</a> or write to <a href="mailto:hello@leafdocs.org">hello@leafdocs.org</a>.</p>
+</section>
+
+<section>
+  <h2>Open by design</h2>
+  <table>
+    <tr><th>Part</th><th>License</th></tr>
+    <tr><td>Format specification</td><td>CC BY 4.0</td></tr>
+    <tr><td>Core library (<code>core/</code>)</td><td>Apache 2.0</td></tr>
+    <tr><td>Viewer app (<code>viewer/</code>)</td><td>AGPL-3.0</td></tr>
+  </table>
+  <p>The format and library are permissive so browsers and companies can add Leaf support. The viewer is AGPL so hosted forks share their improvements. The name Leaf and its logo identify the official format and apps.</p>
+</section>
+</main>
+<footer><div class="wrap">
+  <span>Leaf, the Living Editable Authenticated Format</span>
+  <span><a href="/">Home</a> · <a href="/spec/">Spec</a> · <a href="https://github.com/leafdocsorg-stack/leaf">GitHub</a> · <a href="mailto:hello@leafdocs.org">Contact</a></span>
+</div></footer>
+</body>
+</html>
