@@ -123,8 +123,8 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
     <button id="saveBtn" class="primary only-leaf" title="Save a file anyone can open in their web browser">Save</button>
     <button id="htmlBtn" class="only-leaf devbtn" title="Download the plain .leaf file (for developers)">Download .leaf</button>
     <button id="pdfBtn" class="only-leaf">Save as PDF</button>
-    <button id="savePdfBtn" class="primary only-pdf" hidden>Download PDF</button>
-    <button id="leafBtn" class="only-pdf" hidden title="Save the text of this PDF as a Leaf file anyone can open and edit in their browser. Pictures and exact layout are not carried over.">Save as Leaf</button>
+    <button id="savePdfBtn" class="only-pdf" hidden title="Download a PDF copy">Download PDF</button>
+    <button id="leafBtn" class="primary only-pdf" hidden title="Save a file anyone can open in their web browser. It looks exactly like this document.">Save</button>
   </div>
 </header>
 <div class="status" id="status" aria-live="polite"></div>
@@ -705,13 +705,22 @@ $('#signBtn').onclick = async () => {
 };
 
 /* ---------- open, save, export ---------- */
-let fileHandle = null;
+let fileHandle = null, leafSrc = null;
+async function openLeaf(u8, label) {
+  const r = await Leaf.unpack(u8);
+  if (r.st.source) {
+    if (!window.PDFWS) { say('This document keeps its original page design. Open it in the editor at leafdocs.org/app.'); return; }
+    if (!(await PDFWS.open(r.st.source, (r.st.doc.title || 'document') + '.pdf'))) return;
+    leafSrc = r.st; setStatus([['good', label]]); return;
+  }
+  leafSrc = null; setMode('leaf'); await load(u8, label);
+}
 async function openFile(f, handle) {
-  fileHandle = handle || null;
+  fileHandle = handle || null; leafSrc = null;
   try {
     const u = new Uint8Array(await f.arrayBuffer());
     if (u[0] === 0x25 && u[1] === 0x50 && u[2] === 0x44 && u[3] === 0x46) { if (!window.PDFWS) { say('PDF editing is in the full editor at leafdocs.org/app.'); return; } if (!(await window.PDFWS.open(u, f.name))) return; setStatus([['good', 'Editing ' + f.name + ' in your browser. Nothing was uploaded.']]); return; }
-    setMode('leaf'); await load(u, 'Opened ' + f.name + ' from your device. Nothing was uploaded.');
+    await openLeaf(u, 'Opened ' + f.name + ' from your device. Nothing was uploaded.');
   } catch (err) { say('Could not open that file: ' + err.message); }
 }
 function setMode(m, title) {
@@ -748,14 +757,14 @@ $('#saveBtn').onclick = async () => {
 /* One-file web page: the reader plus the document, so it opens in any browser with no install. */
 const READER = !!document.getElementById('leafdata');
 const toB64 = u8 => { let t = ''; for (let i = 0; i < u8.length; i += 0x8000) t += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(t); };
-async function webPage(bytes) {
-  const tpl = READER ? window.__LEAF_READER_SRC : await fetch('reader.html', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('reader unavailable'); return r.text(); });
+async function webPage(bytes, kind) {
+  const tpl = READER ? window.__LEAF_READER_SRC : await fetch(kind === 'pdf' ? 'reader-pdf.html' : 'reader.html', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('reader unavailable'); return r.text(); });
   if (!tpl) throw new Error('reader unavailable');
   return tpl.replace(/(<script type="text\/plain" id="leafdata">)[\s\S]*?(<\/script>)/, (m, a, b) => a + toB64(bytes) + b);
 }
 const savedMsg = name => 'Saved "' + name + '" (usually in your Downloads folder).\n\nDouble-click it to open it in your web browser. You can also email or send it to anyone: it opens on any computer or phone, with nothing to install.';
-async function saveWebPage(bytes, name) {
-  const html = await webPage(bytes); await offer(name, new TextEncoder().encode(html)); if (!downloads) say(savedMsg(name));
+async function saveWebPage(bytes, name, kind) {
+  const html = await webPage(bytes, kind); await offer(name, new TextEncoder().encode(html)); if (!downloads) say(savedMsg(name));
 }
 const savePure = async () => { await commitEdit(); const p = await Leaf.pack(st); await offer(slug() + '.leaf', p.bytes); };
 const saveMain = async () => {
@@ -820,13 +829,16 @@ document.addEventListener('click', e => { const b = e.target.closest('.sw button
 document.querySelectorAll('.sw, .seg').forEach(g => { const el = document.getElementById(g.dataset.set); const m = [...g.querySelectorAll('button')].find(x => x.dataset.v === el.value) || g.querySelector('button'); g.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === m)); });
 $('#leafBtn').onclick = async () => {
   try {
-    const { title, blocks } = await PDFWS.toBlocks();
-    if (!blocks.length) { say('No text was found in this PDF to convert. If it is a scan, open More tools, then Convert, and make the text searchable first.'); return; }
-    const prev = st, r = await Leaf.unpack(Uint8Array.from(atob(SAMPLE), c => c.charCodeAt(0))), s0 = r.st;
-    s0.doc = { title, language: 'en-US', blocks }; s0.values = {}; s0.signatures = []; s0.versions = []; s0.history = [{ time: now(), author: author(), op: 'import', note: 'Converted from PDF' }]; s0.created = s0.modified = now();
-    st = s0; await relayout(); const p = await Leaf.pack(st), name = slug(); st = prev;
-    await saveWebPage(p.bytes, name + '.leaf.html');
-  } catch (err) { say('Could not convert this PDF: ' + err.message); }
+    const pdf = await PDFWS.build(), { title, blocks } = await PDFWS.toBlocks();
+    const prev = st, s0 = leafSrc ? { ...leafSrc } : (await Leaf.unpack(Uint8Array.from(atob(SAMPLE), c => c.charCodeAt(0)))).st;
+    const t = (leafSrc && leafSrc.doc.title) || title || PDFWS.name().replace(/\.pdf$/i, '') || 'Document';
+    s0.doc = { title: t, language: 'en-US', blocks }; s0.values = {}; s0.signatures = []; s0.versions = []; s0.comments = { threads: [] };
+    s0.history = [...((leafSrc && leafSrc.history) || [{ time: now(), author: author(), op: 'import', note: 'Converted from PDF' }]), { time: now(), author: author(), op: 'edit', note: 'Saved' }];
+    s0.created = (leafSrc && leafSrc.created) || now(); s0.modified = now(); s0.source = pdf;
+    st = s0; await relayout(); const p = await Leaf.pack(st); st = prev;
+    const name = t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'document';
+    await saveWebPage(p.bytes, name + '.leaf.html', 'pdf');
+  } catch (err) { say('Could not save: ' + (err.message || err)); }
 };
 $('#newDocBtn').onclick = () => newDoc().catch(err => say('Could not create the document: ' + err.message));
 function showWhere() {
@@ -904,7 +916,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 setMode('start');
 if (READER) {
   const raw = document.getElementById('leafdata').textContent.trim();
-  if (raw) { setMode('leaf'); load(Uint8Array.from(atob(raw), c => c.charCodeAt(0)), 'To fill it in, click the blank lines on the page. To sign, use Fill & sign on the left. When you are done, press Save to keep your copy.').catch(err => { setMode('start'); say('Could not open the document: ' + err.message); }); }
+  if (raw) setTimeout(() => { openLeaf(Uint8Array.from(atob(raw), c => c.charCodeAt(0)), 'Use the tools on the left to fill in, change or sign this document. When you are done, press Save to keep your copy.').catch(err => { setMode('start'); say('Could not open the document: ' + err.message); }); }, 0);
 }
 if (window.claude && claude.use) claude.use('downloads').then(d => { downloads = d; }).catch(() => {});
 }
