@@ -109,17 +109,21 @@
     if (line.length) lines.push(line);
     return lines.length ? lines : [[]];
   }
-  function layout(doc, styles, metrics) {
+  function layout(doc, styles, metrics, withBoxes) {
     const pg = styles.page, S = styles.styles;
     const [mt, mr, mb, ml] = pg.margin, CW = pg.width - ml - mr, bottom = pg.height - mb;
     const pages = []; let items, y;
     const newPage = () => { items = []; pages.push({ items }); y = mt; };
     newPage();
     const ensure = h => { if (y + h > bottom && y > mt) newPage(); };
-    const textLines = (lines, x, size, lh, id, color) => {
+    // withBoxes adds invisible { k: 'box' } items that give editors the exact area of each editable text unit.
+    const textLines = (lines, x, size, lh, id, color, box) => {
+      let cur = null;
       for (const ln of lines) {
         ensure(size * lh);
+        if (withBoxes && box && (!cur || cur.pg !== pages.length - 1)) { cur = { k: 'box', id, ...box.meta, x: box.x, y: +y.toFixed(2), w: box.w, h: 0, size, lh, b: box.b ? 1 : 0, c: color, pg: pages.length - 1 }; items.push(cur); }
         y += size * lh;
+        if (cur) cur.h = +(y - cur.y).toFixed(2);
         for (const wd of ln) items.push({ k: 't', x: +(x + wd.x).toFixed(2), y: +(y - size * (lh - 1) / 2 - size * 0.22).toFixed(2), s: size, b: wd.b ? 1 : 0, c: color, txt: wd.t, id });
       }
     };
@@ -129,19 +133,19 @@
         y += st.before || 0;
         const lines = wrap([{ t: bl.text, b: true }], CW, st.size, metrics);
         ensure(st.size * st.lh * lines.length + 40);
-        textLines(lines, ml, st.size, st.lh, bl.id, st.color);
+        textLines(lines, ml, st.size, st.lh, bl.id, st.color, { meta: {}, x: ml, w: CW, b: true });
         y += st.after;
       } else if (bl.type === 'paragraph') {
         const st = bl.style === 'small' ? S.small : S.body;
-        textLines(wrap(bl.text, CW, st.size, metrics), ml, st.size, st.lh, bl.id, st.color);
+        textLines(wrap(bl.text, CW, st.size, metrics), ml, st.size, st.lh, bl.id, st.color, { meta: {}, x: ml, w: CW });
         y += st.after;
       } else if (bl.type === 'list') {
         const st = S.body, ind = 16;
-        for (const it of bl.items) {
+        for (const [li, it] of bl.items.entries()) {
           const lines = wrap(textToRuns(it), CW - ind, st.size, metrics);
           ensure(st.size * st.lh);
           items.push({ k: 'dot', x: ml + 5, y: +(y + st.size * st.lh / 2 + 0.5).toFixed(2), id: bl.id });
-          textLines(lines, ml + ind, st.size, st.lh, bl.id);
+          textLines(lines, ml + ind, st.size, st.lh, bl.id, undefined, { meta: { li }, x: ml + ind, w: CW - ind });
           y += 3;
         }
         y += st.after - 3;
@@ -156,6 +160,7 @@
           items.push({ k: 'l', x1: ml, y1: y + h, x2: ml + CW, y2: y + h, id: bl.id });
           let x = ml;
           cells.forEach((lines, ci) => {
+            if (withBoxes) items.push({ k: 'box', id: bl.id, r: ri, c: ci, x, y, w: ws[ci], h, size: st.size, lh: st.lh, pad, b: head || ci === 0 ? 1 : 0 });
             let yy = y + pad;
             for (const ln of lines) { yy += st.size * st.lh; for (const wd of ln) items.push({ k: 't', x: +(x + pad + wd.x).toFixed(2), y: +(yy - st.size * 0.32).toFixed(2), s: st.size, b: wd.b ? 1 : 0, txt: wd.t, id: bl.id }); }
             x += ws[ci];
