@@ -22,7 +22,7 @@ header{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 
 .tools{display:flex;flex-wrap:wrap;gap:8px}
 button,.btn{font:500 14px Inter,system-ui,sans-serif;min-height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 button:hover,.btn:hover{border-color:var(--acc)}button:focus-visible,.btn:focus-within,input:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-button.primary{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}button[aria-pressed=true]{background:var(--chip);border-color:var(--acc);color:var(--acc)}
+button.primary,label.btn.primary{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}button[aria-pressed=true]{background:var(--chip);border-color:var(--acc);color:var(--acc)}
 .btn input{position:absolute;width:1px;height:1px;opacity:0}
 .status{display:flex;flex-wrap:wrap;gap:8px;padding:10px max(2vw,16px) 0;font-size:13px}
 .chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px;display:inline-flex;gap:6px;align-items:center}
@@ -46,7 +46,7 @@ aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;po
 .tabs{display:flex;flex:none;border-bottom:1px solid var(--line);overflow-x:auto}
 .tabs button{border:0;border-radius:0;background:none;min-height:46px;flex:1 0 auto;color:var(--mute);border-bottom:2px solid transparent}
 .tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--acc);font-weight:600}
-.rail{position:sticky;top:76px;display:flex;flex-direction:column;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 6px;align-self:start}
+.rail{position:sticky;top:76px;display:flex;flex-direction:column;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 6px;align-self:start;max-height:calc(100vh - 96px);overflow-y:auto}
 .rail button{flex-direction:column;justify-content:center;gap:5px;width:100%;min-height:66px;padding:8px 2px;border:0;border-radius:8px;background:none;color:var(--mute);font-size:12px;line-height:1.15;text-align:center}
 .rail button:hover{background:var(--chip);color:var(--ink)}
 .rail button[aria-selected=true]{background:var(--chip);color:var(--acc);font-weight:600}
@@ -88,7 +88,7 @@ dialog::backdrop{background:rgba(10,14,18,.45)}
 .toolrow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}.toolrow button{justify-content:center}
 #sigPad{width:100%;height:auto;aspect-ratio:3/1;background:#fff;border:1px dashed var(--line);border-radius:8px;touch-action:none;cursor:crosshair;display:block}
 #sigPreview img{max-width:100%;max-height:80px;background:#fff;border-radius:6px;padding:4px;margin-top:8px}
-.ck{display:flex;gap:8px;align-items:center;min-height:40px}
+.ck{display:flex;gap:8px;align-items:flex-start;min-height:40px;padding:6px 0}.ck input{flex:none;width:16px;height:16px;margin:2px 0 0}
 select.t{min-height:42px;width:100%;font:16px Inter,system-ui,sans-serif;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
 input[type=range]{accent-color:var(--acc)}
 .pane .t{margin-bottom:10px}
@@ -99,6 +99,11 @@ input[type=range]{accent-color:var(--acc)}
 input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
 .busy{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:10px 18px;border-radius:999px;font-size:14px;z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.2)}
 @media(max-width:900px){main,.pdfm{grid-template-columns:minmax(0,1fr)}aside,.thumbs,.rail{position:static;max-height:none}.rail{flex-direction:row;overflow-x:auto}.rail button{flex:1 0 76px}.devtoggle{margin:0 0 0 6px;padding:0 0 0 8px;border-top:0;border-left:1px solid var(--line);flex:0 0 auto}#pdfThumbs{display:flex;gap:8px;overflow-x:auto}.thumb{flex:0 0 130px}}
+.start{display:block;max-width:560px;margin:10vh auto 0;text-align:center;padding:0 16px}
+.start h1{font-size:26px;letter-spacing:-.4px;margin:0 0 8px}.start p{color:var(--mute);margin:0 0 22px}
+.start .row{justify-content:center}.start .big{min-height:48px;padding:0 22px;font-size:15px}
+.start .dz{border:1.5px dashed var(--line);border-radius:14px;padding:34px 20px;background:var(--panel)}
+.insgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.insgrid button{min-height:40px}
 @media(prefers-reduced-motion:no-preference){.page{transition:box-shadow .2s}}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
@@ -112,7 +117,6 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
   <div class="doc-title" id="docTitle">Loading…</div>
   <div class="tools">
     <label class="btn" title="Open a .leaf or .pdf file">Open file<input type="file" id="fileIn" accept=".leaf,.lef,.zip,.pdf,application/pdf,application/zip"></label>
-    <button id="sampleBtn" class="only-pdf" hidden>Leaf sample</button>
     <button id="editBtn" class="only-leaf" aria-pressed="false" style="display:none">Edit text</button>
     <button id="saveBtn" class="only-leaf">Save .leaf</button>
     <button id="pdfBtn" class="primary only-leaf">Export PDF</button>
@@ -120,11 +124,21 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
   </div>
 </header>
 <div class="status" id="status" aria-live="polite"></div>
-<main id="leafMain">
+<main id="startMain" class="start">
+  <div class="dz">
+    <h1>Open a document</h1>
+    <p>Edit, fill and sign PDF and Leaf files right here. Everything stays on your device.</p>
+    <div class="row"><label class="btn primary big">Open a file<input type="file" id="fileIn2" accept=".leaf,.lef,.zip,.pdf,application/pdf,application/zip"></label><button class="big" id="newDocBtn">New document</button></div>
+    <p style="margin:18px 0 0;font-size:13px">or drop a .pdf or .leaf file anywhere on this page</p>
+  </div>
+</main>
+<main id="leafMain" hidden>
   <nav class="rail" role="tablist" aria-label="Tools">
     <button role="tab" aria-selected="true" data-tab="sign"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16c3-6 5-8 6-6s-2 6 1 5 4-5 5-3 2 3 5 1"/><path d="M3 21h18"/></svg><span>Fill &amp; sign</span></button>
     <button role="tab" aria-selected="false" data-tab="edit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg><span>Edit text</span></button>
+    <button role="tab" aria-selected="false" data-tab="insert"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Insert</span></button>
     <button role="tab" aria-selected="false" data-tab="history"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg><span>History</span></button>
+    <button role="tab" aria-selected="false" data-tab="export"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Export</span></button>
     <button role="tab" aria-selected="false" data-tab="inside" class="dev-only" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12"/></svg><span>File parts</span></button>
     <label class="devtoggle" title="Developer mode: show the parts inside the file"><input type="checkbox" id="devMode"><span>Developer mode</span></label>
   </nav>
@@ -152,6 +166,27 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
       </ul>
       <p class="note">Press Save .leaf at the top to keep your changes. Every edit is recorded in History. Editing a signed document breaks its signature, which is how tampering is detected.</p>
     </div>
+    <div class="pane" id="tab-insert" hidden>
+      <h2>Insert</h2>
+      <p class="lead">Add something new. It goes after the block you last clicked, then opens for typing.</p>
+      <p class="note" id="insWhere"></p>
+      <div class="insgrid">
+        <button data-ins="heading">Heading</button><button data-ins="paragraph">Paragraph</button>
+        <button data-ins="list">Bullet list</button><button data-ins="table">Table</button>
+        <button data-ins="text">Text field</button><button data-ins="date">Date field</button>
+        <button data-ins="checkbox">Checkbox</button><button data-ins="signature">Signature line</button>
+      </div>
+      <div class="row"><button id="delBlock">Delete selected block</button><button id="undoIns">Undo</button></div>
+    </div>
+    <div class="pane" id="tab-export" hidden>
+      <h2>Export</h2>
+      <p class="lead">Save your document, or turn it into another format.</p>
+      <div class="insgrid">
+        <button class="primary" data-exp="leaf">Leaf file (.leaf)</button><button data-exp="pdf">PDF</button>
+        <button data-exp="md">Markdown (.md)</button><button data-exp="txt">Plain text (.txt)</button>
+      </div>
+      <p class="note">The .leaf file keeps everything: text, answers, history and signatures. PDF, Markdown and text are copies for sharing.</p>
+    </div>
     <div class="pane" id="tab-history" hidden>
       <h2>History</h2>
       <p class="lead">Every change to this document: what happened, who did it and when. The record is stored inside the file.</p>
@@ -167,23 +202,40 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
 </main>
 <main id="pdfMain" class="pdfm" hidden>
   <nav class="rail" role="tablist" aria-label="Tools">
-    <button role="tab" aria-selected="true" data-tab="annot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H10l-5 4v-4H4z"/></svg><span>Annotate</span></button>
+    <button role="tab" aria-selected="true" data-tab="pedit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg><span>Edit text</span></button>
+    <button role="tab" aria-selected="false" data-tab="annot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H10l-5 4v-4H4z"/></svg><span>Annotate</span></button>
     <button role="tab" aria-selected="false" data-tab="pgs"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="12" height="15" rx="1.5"/><path d="M4 7v13h11"/></svg><span>Pages</span></button>
     <button role="tab" aria-selected="false" data-tab="form"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="4" height="4" rx=".8"/><rect x="4" y="14" width="4" height="4" rx=".8"/><path d="M11 7h9M11 16h9"/></svg><span>Fill form</span></button>
     <button role="tab" aria-selected="false" data-tab="psign"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16c3-6 5-8 6-6s-2 6 1 5 4-5 5-3 2 3 5 1"/><path d="M3 21h18"/></svg><span>Sign</span></button>
-    <button role="tab" aria-selected="false" data-tab="ptools"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg><span>More tools</span></button>
+    <button role="tab" aria-selected="false" data-tab="predact"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="9" width="18" height="6" rx="1"/><path d="M6 5h6M6 19h10"/></svg><span>Redact</span></button>
+    <button role="tab" aria-selected="false" data-tab="pstamp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v6l3 4v2H6v-2l3-4z"/><path d="M5 20h14"/></svg><span>Stamps</span></button>
+    <button role="tab" aria-selected="false" data-tab="pprot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg><span>Protect</span></button>
+    <button role="tab" aria-selected="false" data-tab="pconv"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg><span>Convert</span></button>
   </nav>
   <nav class="thumbs" aria-label="Page list"><div class="thead"><b id="pgCount"></b><button id="selAll">Select all</button></div><div id="pdfThumbs"></div></nav>
   <section class="ppages" id="pdfPages" data-tool="none" aria-label="PDF pages"></section>
   <aside>
-    <div class="pane" id="tab-annot">
+    <div class="pane" id="tab-pedit">
+      <h3>Edit text</h3>
+      <p>Click any line of text on the page and type to change it. Press Enter to apply, Esc to cancel. Click an edited line again to change it further.</p>
+      <p id="editHint" class="note"></p>
+      <label class="ck"><input type="checkbox" id="pEditPerm"> Remove the original text completely (the edited pages become images, so text can no longer be selected or copied)</label>
+      <p class="note">Edited text uses the closest standard font (Helvetica, Times or Courier) and matches the original size and colour. Scans have no editable text; use Convert first.</p>
+      <div class="row"><button class="undoBtn">Undo last change</button></div>
+    </div>
+    <div class="pane" id="tab-annot" hidden>
       <div class="toolrow">
         <button data-tool="none" aria-pressed="true">Select</button>
         <button data-tool="hl" aria-pressed="false">Highlight</button>
+        <button data-tool="ul" aria-pressed="false">Underline</button>
+        <button data-tool="st" aria-pressed="false">Strikethrough</button>
         <button data-tool="ink" aria-pressed="false">Draw</button>
+        <button data-tool="rect" aria-pressed="false">Box</button>
         <button data-tool="text" aria-pressed="false">Add text</button>
+        <button data-tool="image" aria-pressed="false" onclick="if(!document.getElementById('imgName').textContent)document.getElementById('imgPick').click()">Add image</button>
       </div>
       <p id="toolHint" class="note"></p>
+      <p class="note">Image: <span id="imgName"></span> <label class="btn" style="display:inline-flex;min-height:28px;padding:0 10px">Choose<input type="file" id="imgPick" accept="image/png,image/jpeg,image/webp"></label></p>
       <label class="f" for="annText">Text to add</label>
       <input class="t" id="annText" placeholder="e.g. Approved, see note">
       <label class="f" for="annSize">Text size</label>
@@ -194,7 +246,6 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
       <p>Rotate, move or delete pages with the buttons under each page in the list. Tick pages to extract them.</p>
       <div class="row"><label class="btn">Add PDF (merge)<input type="file" id="addPdf" accept=".pdf,application/pdf"></label></div>
       <div class="row"><button id="extractBtn">Extract ticked pages</button><button id="splitBtn">Split in two</button></div>
-      <p class="note">Saving uses object streams to keep files small. Stronger image compression comes in phase 2.</p>
     </div>
     <div class="pane" id="tab-form" hidden>
       <p>Fill the PDF's own form fields. Values are written into the file when you save.</p>
@@ -220,12 +271,14 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
       <div id="sigPreview"></div>
       <p class="note">After choosing, click on the page to place it. This is a visual e-signature; certificate-based signing comes in phase 3.</p>
     </div>
-    <div class="pane" id="tab-ptools" hidden>
+    <div class="pane" id="tab-predact" hidden>
       <h3>Redact</h3>
       <p>Drag boxes over anything that must go. On save, those pages are rebuilt so the covered text and images are permanently removed, and document info such as author and title is cleared.</p>
       <div class="row"><button data-tool="redact" aria-pressed="false">Mark for redaction</button><button class="undoBtn">Undo</button></div>
       <p id="redactHint" class="note"></p>
-      <h3 style="margin-top:18px">Watermark</h3>
+    </div>
+    <div class="pane" id="tab-pstamp" hidden>
+      <h3>Watermark</h3>
       <label class="f" for="wmText">Watermark text</label>
       <input class="t" id="wmText" placeholder="e.g. CONFIDENTIAL">
       <label class="f" for="wmOpacity">Strength</label>
@@ -243,14 +296,30 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
         <div><label class="f" for="batesStart">Start</label><input class="t" id="batesStart" type="number" min="0" value="1"></div>
         <div><label class="f" for="batesDigits">Digits</label><input class="t" id="batesDigits" type="number" min="1" max="12" value="6"></div>
       </div>
-      <h3 style="margin-top:18px">Text recognition (OCR)</h3>
-      <p>Makes scanned pages searchable and copyable. Runs on the ticked pages, or all pages if none are ticked. The first run downloads the English language model from this page, about 15 MB.</p>
-      <div class="row"><button id="ocrBtn">Recognize text</button></div>
-      <p id="ocrResult" class="note"></p>
-      <h3 style="margin-top:18px">Password</h3>
+          </div>
+    <div class="pane" id="tab-pprot" hidden>
+      <h3>Password</h3>
       <label class="f" for="pwSet">Require this password to open the saved PDF</label>
       <input class="t" id="pwSet" type="password" autocomplete="new-password" placeholder="Leave empty for no password">
       <p class="note">Encrypted with AES-256. Opening a protected PDF here asks for its password and removes it from your working copy.</p>
+
+      <h3 style="margin-top:18px">Document info</h3>
+      <label class="f" for="infoTitle">Title</label><input class="t" id="infoTitle" placeholder="Leave empty to keep">
+      <label class="f" for="infoAuthor">Author</label><input class="t" id="infoAuthor" placeholder="Leave empty to keep">
+      <label class="f" for="infoSubject">Subject</label><input class="t" id="infoSubject" placeholder="Leave empty to keep">
+    </div>
+    <div class="pane" id="tab-pconv" hidden>
+      <h3>Make text searchable (OCR)</h3>
+      <p>Makes scanned pages searchable and copyable. Runs on the ticked pages, or all pages if none are ticked. The first run downloads the English language model from this page, about 15 MB.</p>
+      <div class="row"><button id="ocrBtn">Recognize text</button></div>
+      <p id="ocrResult" class="note"></p>
+      
+      <h3 style="margin-top:18px">Export pages as images</h3>
+      <p>Saves each page as a PNG picture (a single zip if there are several).</p>
+      <div class="row"><button id="exportPng">Export images</button></div>
+      <h3 style="margin-top:18px">Extract text</h3>
+      <p>Saves all the text in the document as a plain .txt file.</p>
+      <div class="row"><button id="extractTxt">Extract text</button></div>
     </div>
   </aside>
 </main>
@@ -366,7 +435,7 @@ $('#pages').addEventListener('change', async e => {
 /* ---------- editing: in place, like a word processor ---------- */
 // The page is drawn from a fixed layout, so the editor only changes the words. Fonts, sizes, margins and
 // spacing come from the document's styles and cannot be changed by typing, so formatting can't get messed up.
-let editing = false, ed = null, undoStack = [];
+let editing = false, ed = null, undoStack = [], selId = null;
 const editGeom = () => Leaf.layout(st.doc, st.styles, metrics, true);
 const same = (b, t) => b.id === t.id && b.li === t.li && b.r === t.r && b.c === t.c;
 const newId = () => 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
@@ -497,7 +566,7 @@ $('#pages').addEventListener('mousedown', async e => {
   const box = boxAt(pi, x, y);
   if (!box) { if (ed) { e.preventDefault(); await commitEdit(); } return; }
   e.preventDefault();
-  const t = { id: box.id, li: box.li, r: box.r, c: box.c };
+  const t = { id: box.id, li: box.li, r: box.r, c: box.c }; selId = box.id; showWhere();
   const changed = await commitEdit();
   await openEditor(t, { pi, cx: e.clientX, cy: e.clientY }, changed ? 'end' : 'point');
 });
@@ -579,21 +648,21 @@ async function openFile(f) {
   } catch (err) { say('Could not open that file: ' + err.message); }
 }
 function setMode(m, title) {
-  $('#leafMain').hidden = m !== 'leaf'; $('#pdfMain').hidden = m !== 'pdf';
+  $('#startMain').hidden = m !== 'start'; $('#leafMain').hidden = m !== 'leaf'; $('#pdfMain').hidden = m !== 'pdf';
   document.querySelectorAll('.only-leaf').forEach(e => e.hidden = m !== 'leaf');
   document.querySelectorAll('.only-pdf').forEach(e => e.hidden = m !== 'pdf');
   if (m === 'leaf' && st) $('#docTitle').textContent = st.doc.title;
   if (m === 'pdf') $('#docTitle').textContent = title || 'PDF';
+  if (m === 'start') { $('#docTitle').textContent = 'No file open'; setStatus([]); }
 }
-$('#sampleBtn').onclick = () => { setMode('leaf'); load(Uint8Array.from(atob(SAMPLE), c => c.charCodeAt(0)), 'Sample file: lease-sample.leaf.'); };
-$('#fileIn').onchange = e => { const f = e.target.files[0]; if (f) openFile(f); e.target.value = ''; };
+$('#fileIn').onchange = $('#fileIn2').onchange = e => { const f = e.target.files[0]; if (f) openFile(f); e.target.value = ''; };
 document.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('drop'); });
 document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('drop'); });
 document.addEventListener('drop', e => { e.preventDefault(); document.body.classList.remove('drop'); const f = e.dataTransfer.files[0]; if (f) openFile(f); });
 const slug = () => st.doc.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'document';
 async function offer(filename, data) {
   if (!downloads) {
-    const url = URL.createObjectURL(new Blob([data], { type: /\.pdf$/i.test(filename) ? 'application/pdf' : 'application/vnd.leaf+zip' }));
+    const url = URL.createObjectURL(new Blob([data], { type: /\.pdf$/i.test(filename) ? 'application/pdf' : /\.(md|txt)$/i.test(filename) ? 'text/plain' : /\.png$/i.test(filename) ? 'image/png' : /\.zip$/i.test(filename) && !/\.leaf\.zip$/i.test(filename) ? 'application/zip' : 'application/vnd.leaf+zip' }));
     const a = Object.assign(document.createElement('a'), { href: url, download: filename });
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); return;
   }
@@ -636,8 +705,69 @@ document.querySelectorAll('.rail').forEach(t => t.addEventListener('click', e =>
   const b = e.target.closest('[data-tab]'); if (!b) return; const scope = t.closest('main');
   t.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-selected', x === b));
   scope.querySelectorAll('.pane').forEach(p => { p.hidden = p.id !== 'tab-' + b.dataset.tab; });
-  if (scope.id === 'leafMain' && editing !== (b.dataset.tab === 'edit')) $('#editBtn').onclick();
+  if (scope.id === 'pdfMain' && window.PDFWS) PDFWS.onTab(b.dataset.tab);
+  if (scope.id === 'leafMain' && editing !== (b.dataset.tab === 'edit' || b.dataset.tab === 'insert')) $('#editBtn').onclick();
 }));
+
+/* ---------- new document, insert, export ---------- */
+async function newDoc() {
+  const r = await Leaf.unpack(Uint8Array.from(atob(SAMPLE), c => c.charCodeAt(0))), s0 = r.st;
+  s0.doc = { title: 'Untitled document', language: 'en-US', blocks: [{ id: 'h1', type: 'heading', level: 1, text: 'Untitled document' }, { id: 'p1', type: 'paragraph', text: [{ t: 'Click here and start typing.' }] }] };
+  s0.values = {}; s0.signatures = []; s0.versions = []; s0.history = [{ time: now(), author: author(), op: 'create' }]; s0.created = s0.modified = now();
+  st = s0; await relayout(); const p = await Leaf.pack(st);
+  setMode('leaf'); await load(p.bytes, 'New document. Click the text to edit it, or use Insert to add more.');
+  $('[data-tab="edit"]').click();
+}
+$('#newDocBtn').onclick = () => newDoc().catch(err => say('Could not create the document: ' + err.message));
+function showWhere() {
+  const b = st && st.doc.blocks.find(x => x.id === selId);
+  const t = b ? (b.type === 'heading' ? b.text : b.type === 'paragraph' ? Leaf.runsToText(b.text) : b.type === 'list' ? b.items[0] : b.type) : '';
+  $('#insWhere').textContent = b ? 'After: ' + String(t).replace(/\*\*/g, '').slice(0, 48) + (String(t).length > 48 ? '…' : '') : 'Click a block on the page to choose where it goes. Otherwise it is added at the end.';
+}
+$('[data-tab="insert"]').addEventListener('click', showWhere);
+document.querySelectorAll('[data-ins]').forEach(b => { b.addEventListener('mousedown', e => e.preventDefault()); b.onclick = async () => {
+  await commitEdit(); const k = b.dataset.ins, id = newId(), n = Date.now().toString(36).slice(-4), blocks = st.doc.blocks;
+  let bl, focus = null;
+  if (k === 'heading') { bl = { id, type: 'heading', level: 2, text: 'New heading' }; focus = { id }; }
+  else if (k === 'paragraph') { bl = { id, type: 'paragraph', text: [{ t: 'New paragraph' }] }; focus = { id }; }
+  else if (k === 'list') { bl = { id, type: 'list', items: ['First item', 'Second item'] }; focus = { id, li: 0 }; }
+  else if (k === 'table') { bl = { id, type: 'table', header: true, widths: [0.4, 0.6], rows: [['Item', 'Details'], ['', ''], ['', '']] }; focus = { id, r: 0, c: 0 }; }
+  else if (k === 'signature') bl = { id, type: 'signature', name: 'signature_' + n, label: 'SIGNATURE' };
+  else bl = { id, type: 'fields', fields: [{ name: 'field_' + n, label: k === 'date' ? 'DATE' : k === 'checkbox' ? 'CHECK HERE' : 'YOUR ANSWER', ft: k === 'text' ? 'text' : k }] };
+  undoStack.push(JSON.stringify(st.doc));
+  let i = selId ? blocks.findIndex(x => x.id === selId) : -1; if (i < 0) i = blocks.length - 1; blocks.splice(i + 1, 0, bl); selId = id;
+  st.history.push({ time: now(), author: author(), op: 'replace', block: id, what: 'new ' + (k === 'text' || k === 'date' || k === 'checkbox' ? k + ' field' : k === 'signature' ? 'signature line' : k) }); st.modified = now();
+  await relayout(); await refresh(); showWhere();
+  if (focus) { const L = editGeom(); let pi = -1; L.pages.forEach((p, j) => p.items.forEach(x => { if (x.k === 'box' && x.id === id && pi < 0) pi = j; })); await openEditor(focus, { pi }, 'end'); }
+}; });
+$('#delBlock').onclick = async () => {
+  await commitEdit(); const i = st.doc.blocks.findIndex(x => x.id === selId);
+  if (i < 0) { say('Click a block on the page first, then press Delete.'); return; }
+  if (st.doc.blocks.length < 2) { say('A document needs at least one block.'); return; }
+  undoStack.push(JSON.stringify(st.doc)); st.doc.blocks.splice(i, 1); selId = null;
+  st.history.push({ time: now(), author: author(), op: 'replace', what: 'block (deleted)' }); st.modified = now();
+  await relayout(); await refresh(); showWhere();
+};
+$('#undoIns').onclick = () => $('#undoEdit').onclick();
+const plainRuns = r => r.map(x => x.t).join('');
+const mdRuns = r => r.map(x => x.b && x.t.trim() ? '**' + x.t.trim() + '**' + (/\s$/.test(x.t) ? ' ' : '') : x.t).join('');
+function toText(md) {
+  const out = [];
+  for (const b of st.doc.blocks) {
+    if (b.type === 'heading') out.push((md ? '#'.repeat(b.level || 1) + ' ' : '') + b.text);
+    else if (b.type === 'paragraph') out.push(md ? mdRuns(b.text) : plainRuns(b.text));
+    else if (b.type === 'list') out.push(b.items.map(i => '- ' + (md ? i : i.replace(/\*\*/g, ''))).join('\n'));
+    else if (b.type === 'table') { const rows = b.rows.map(r => '| ' + r.join(' | ') + ' |'); out.push(md ? [rows[0], '|' + b.rows[0].map(() => ' --- |').join(''), ...rows.slice(1)].join('\n') : b.rows.map(r => r.join('\t')).join('\n')); }
+    else if (b.type === 'fields') out.push(b.fields.map(f => { const v = st.values[f.name]; return (md ? '**' + f.label + ':** ' : f.label + ': ') + (f.ft === 'checkbox' ? (v ? '[x]' : '[ ]') : v || '________'); }).join(md ? '  \n' : '\n'));
+    else if (b.type === 'signature') out.push((b.label || 'Signature') + ': ' + (st.values[b.name] ? String(st.values[b.name]).replace(/\n/g, ' ') : '________'));
+  }
+  return out.join('\n\n') + '\n';
+}
+document.querySelectorAll('[data-exp]').forEach(b => b.onclick = async () => {
+  const k = b.dataset.exp; await commitEdit();
+  if (k === 'leaf') $('#saveBtn').onclick(); else if (k === 'pdf') $('#pdfBtn').onclick();
+  else await offer(slug() + (k === 'md' ? '.md' : '.txt'), new TextEncoder().encode(toText(k === 'md')));
+});
 /* ---------- developer mode ---------- */
 (function(){
   const box = document.getElementById('devMode'), tab = document.querySelector('#leafMain [data-tab="inside"]');
@@ -653,10 +783,9 @@ document.querySelectorAll('.rail').forEach(t => t.addEventListener('click', e =>
 window.LeafApp = { say, offer, setMode, state: () => st };
 
 /* ---------- start ---------- */
-const u8 = Uint8Array.from(atob(SAMPLE), c => c.charCodeAt(0));
 if ('launchQueue' in window) launchQueue.setConsumer(async p => { if (p.files && p.files.length) openFile(await p.files[0].getFile()); });
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
-load(u8, 'Sample file: lease-sample.leaf. Open your own .leaf file or drop it anywhere.').catch(err => say('Could not load the sample: ' + err.message));
+setMode('start');
 if (window.claude && claude.use) claude.use('downloads').then(d => { downloads = d; }).catch(() => {});
 }
 </script>
