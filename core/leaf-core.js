@@ -205,11 +205,12 @@
       'history/changes.jsonl': enc.encode(st.history.map(h => JSON.stringify(h)).join('\n') + (st.history.length ? '\n' : '')),
       'comments/comments.json': j(st.comments || { threads: [] })
     };
+    if (st.source) files['layout/source.pdf'] = st.source; // original page appearance (fixed-layout pages)
     for (const v of st.versions) for (const [k, val] of Object.entries(v.files)) files['versions/' + v.n + '/' + k] = val;
     st.signatures.forEach((s, i) => { files['signatures/sig-' + (i + 1) + '.json'] = j(s); });
     const parts = {};
     for (const k of Object.keys(files).sort()) parts[k] = { sha256: await sha256(files[k]), bytes: files[k].length };
-    const manifest = { leaf: '0.1', title: st.doc.title, language: st.doc.language || 'en-US', created: st.created, modified: st.modified, generator: 'Leaf reference viewer 0.1', requires: ['forms'], parts };
+    const manifest = { leaf: '0.1', title: st.doc.title, language: st.doc.language || 'en-US', created: st.created, modified: st.modified, generator: 'Leaf reference viewer 0.1', requires: st.source ? ['forms', 'fixed-pages'] : ['forms'], parts };
     return { files, manifest };
   }
   async function pack(st) {
@@ -234,7 +235,7 @@
     const signatures = Object.keys(files).filter(k => k.startsWith('signatures/')).sort().map(J);
     const hist = files['history/changes.jsonl'] ? dec.decode(files['history/changes.jsonl']).split('\n').filter(Boolean).map(l => JSON.parse(l)) : [];
     return {
-      st: { doc: J('content/document.json'), styles: J('content/styles.json'), snapshot: J('layout/pages.json'), values: J('data/values.json') || {}, history: hist, comments: J('comments/comments.json'), versions: Object.values(versions).sort((a, b) => a.n - b.n), signatures, created: manifest.created, modified: manifest.modified },
+      st: { doc: J('content/document.json'), styles: J('content/styles.json'), snapshot: J('layout/pages.json'), values: J('data/values.json') || {}, history: hist, comments: J('comments/comments.json'), versions: Object.values(versions).sort((a, b) => a.n - b.n), signatures, created: manifest.created, modified: manifest.modified, source: files['layout/source.pdf'] || null },
       manifest, files, tampered: bad
     };
   }
