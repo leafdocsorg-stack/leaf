@@ -83,7 +83,7 @@ dialog::backdrop{background:rgba(10,14,18,.45)}
 .ppage{position:relative;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12),0 8px 24px rgba(0,0,0,.08);max-width:100%}
 .ppage canvas{display:block;width:100%;height:100%}
 .ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.ppages:not([data-tool=none]) .ov{pointer-events:auto;cursor:crosshair;touch-action:none}
+.ppages:not([data-tool=none]) .ov{pointer-events:auto;cursor:crosshair;touch-action:pan-x pan-y pinch-zoom}.ppages:is([data-tool=hl],[data-tool=ul],[data-tool=st],[data-tool=rect],[data-tool=ell],[data-tool=line],[data-tool=arrow],[data-tool=link],[data-tool=redact],[data-tool=field],[data-tool=ink]) .ov{touch-action:none}
 .pnum{position:absolute;right:8px;bottom:-22px;font-size:12px;color:var(--mute)}
 .toolrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}.toolrow button{justify-content:center}
 #sigPad{width:100%;height:auto;aspect-ratio:3/1;background:#fff;border:1px dashed var(--line);border-radius:8px;touch-action:none;cursor:crosshair;display:block}
@@ -118,7 +118,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
   <button id="homeBtn" hidden title="Close this file and go back to the start screen">Close file</button>
   <div class="doc-title" id="docTitle">Loading…</div>
   <div class="tools">
-    <label class="btn" title="Open a different PDF or Leaf file">Open another<input type="file" id="fileIn" accept=".leaf,.lef,.zip,.pdf,application/pdf,application/zip"></label>
+    <label class="btn" title="Open a different PDF or Leaf file">Open another<input type="file" id="fileIn" accept=".leaf,.lef,.zip,.pdf,.html,.htm,application/pdf,application/zip,text/html"></label>
     <button id="editBtn" class="only-leaf" aria-pressed="false" style="display:none">Edit text</button>
     <button id="pdfBtn" class="only-leaf quiet" title="Download a PDF copy">Save as PDF</button>
     <button id="saveBtn" class="primary only-leaf" title="Save a file anyone can open in their web browser, with nothing to install">Save as Leaf <span class="rec">(recommended)</span></button>
@@ -132,7 +132,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
   <div class="dz">
     <h1>Open or create a document</h1>
     <p>Works with Leaf (<b>.leaf</b>) and PDF files. Everything stays on your computer.</p>
-    <div class="row"><label class="btn primary huge">Open a file<input type="file" id="fileIn2" accept=".leaf,.lef,.zip,.pdf,application/pdf,application/zip"></label><button class="huge" id="newDocBtn">New Leaf document</button></div>
+    <div class="row"><label class="btn primary huge">Open a file<input type="file" id="fileIn2" accept=".leaf,.lef,.zip,.pdf,.html,.htm,application/pdf,application/zip,text/html"></label><button class="huge" id="newDocBtn">New Leaf document</button></div>
     <p style="margin:16px 0 0;font-size:14px">or drop a file anywhere on this page</p>
   </div>
   <div class="install" id="installBox" hidden>
@@ -718,7 +718,12 @@ async function openLeaf(u8, label) {
 async function openFile(f, handle) {
   fileHandle = handle || null; leafSrc = null;
   try {
-    const u = new Uint8Array(await f.arrayBuffer());
+    let u = new Uint8Array(await f.arrayBuffer());
+    if (u[0] !== 0x25 && (/\.html?$/i.test(f.name) || u[0] === 0x3c)) {
+      const m = new TextDecoder().decode(u).match(/<script type="text\/plain" id="leafdata">\s*([A-Za-z0-9+\/=]+)\s*<\/script>/);
+      if (!m) { say('This web page is not a Leaf document.'); return; }
+      u = Uint8Array.from(atob(m[1]), c => c.charCodeAt(0));
+    }
     if (u[0] === 0x25 && u[1] === 0x50 && u[2] === 0x44 && u[3] === 0x46) { if (!window.PDFWS) { say('PDF editing is in the full editor at leafdocs.org/app.'); return; } if (!(await window.PDFWS.open(u, f.name))) return; setStatus([['good', 'Editing ' + f.name + ' in your browser. Nothing was uploaded.']]); return; }
     await openLeaf(u, 'Opened ' + f.name + ' from your device. Nothing was uploaded.');
   } catch (err) { say('Could not open that file: ' + err.message); }
@@ -762,7 +767,9 @@ async function webPage(bytes, kind) {
   if (!tpl) throw new Error('reader unavailable');
   return tpl.replace(/(<script type="text\/plain" id="leafdata">)[\s\S]*?(<\/script>)/, (m, a, b) => a + toB64(bytes) + b);
 }
-const savedMsg = name => 'Saved "' + name + '" (usually in your Downloads folder).\n\nDouble-click it to open it in your web browser. You can also email or send it to anyone: it opens on any computer or phone, with nothing to install.';
+const savedMsg = name => matchMedia('(pointer: coarse)').matches
+  ? 'Saved "' + name + '" to your Downloads.\n\nTo open it on a phone, go to leafdocs.org/app, tap Open a file and choose it. On a computer, just double-click it. You can send it to anyone, with nothing to install.'
+  : 'Saved "' + name + '" (usually in your Downloads folder).\n\nDouble-click it to open it in your web browser. You can also email or send it to anyone. On a phone, they open leafdocs.org/app and tap Open a file.';
 async function saveWebPage(bytes, name, kind) {
   const html = await webPage(bytes, kind); await offer(name, new TextEncoder().encode(html)); if (!downloads) say(savedMsg(name));
 }
