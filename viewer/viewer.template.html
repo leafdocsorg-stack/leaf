@@ -792,11 +792,14 @@ async function staticPdf(bytes) {
   }
   return out.join('');
 }
+// The preview's "Edit or sign" button carries the document in the link's #fragment, which never leaves the phone.
+const editLink = bytes => { const b = toB64(bytes); return b.length <= 1500000 ? 'https://leafdocs.org/app/#doc=' + b.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : 'https://leafdocs.org/app/#open'; };
 async function webPage(bytes, kind, preview) {
   const tpl = READER ? window.__LEAF_READER_SRC : await fetch(kind === 'pdf' ? 'reader-pdf.html' : 'reader.html', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('reader unavailable'); return r.text(); });
   if (!tpl) throw new Error('reader unavailable');
   return tpl.replace(/(<script type="text\/plain" id="leafdata">)[\s\S]*?(<\/script>)/, (m, a, b) => a + toB64(bytes) + b)
-    .replace(/(<div id="nojsDoc">)[\s\S]*?(<\/div><!--\/nojsDoc-->)/, (m, a, b) => a + (preview || '') + b);
+    .replace(/(<div id="nojsDoc">)[\s\S]*?(<\/div><!--\/nojsDoc-->)/, (m, a, b) => a + (preview || '') + b)
+    .replace(/(<a id="nojsEdit" href=")[^"]*(")/, (m, a, b) => a + editLink(bytes) + b);
 }
 const savedMsg = name => matchMedia('(pointer: coarse)').matches
   ? 'Saved "' + name + '" to your Downloads.\n\nTo open it on a phone, go to leafdocs.org/app, tap Open a file and choose it. On a computer, just double-click it. You can send it to anyone, with nothing to install.'
@@ -955,6 +958,11 @@ addEventListener('appinstalled', () => { $('#installBox').hidden = true; install
 $('#installBtn').onclick = async () => { if (!installEvt) return; installEvt.prompt(); const r = await installEvt.userChoice; if (r.outcome === 'accepted') $('#installBox').hidden = true; installEvt = null; };
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 setMode('start');
+if (!READER && /^#doc=/.test(location.hash)) {
+  const raw = location.hash.slice(5).replace(/-/g, '+').replace(/_/g, '/'); history.replaceState(null, '', location.pathname);
+  try { const u8 = Uint8Array.from(atob(raw + '='.repeat((4 - raw.length % 4) % 4)), c => c.charCodeAt(0)); const go = () => openLeaf(u8, 'Opened from the document preview. Nothing was uploaded.').catch(err => say('Could not open the document: ' + err.message)); if (document.readyState === 'complete') setTimeout(go, 0); else addEventListener('load', go, { once: true }); }
+  catch (e) { say('This link does not hold a complete document. Tap Open a file and choose the file instead.'); }
+} else if (!READER && location.hash === '#open') { history.replaceState(null, '', location.pathname); say('Tap Open a file and choose the document you were viewing.'); }
 if (READER) {
   const raw = document.getElementById('leafdata').textContent.trim();
   if (raw) setTimeout(() => { openLeaf(Uint8Array.from(atob(raw), c => c.charCodeAt(0)), 'Use the tools on the left to fill in, change or sign this document. When you are done, press Save as Leaf to keep your copy.').catch(err => { setMode('start'); say('Could not open the document: ' + err.message); }); }, 0);
