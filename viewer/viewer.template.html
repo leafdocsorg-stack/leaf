@@ -719,10 +719,19 @@ async function openLeaf(u8, label) {
   }
   leafSrc = null; setMode('leaf'); await load(u8, label);
 }
+// Read a picked file; if the browser's first read fails (seen on iPhone with files from Files or iCloud), try once more another way.
+async function readBytes(f) {
+  try { return new Uint8Array(await f.arrayBuffer()); }
+  catch (e1) {
+    await new Promise(r => setTimeout(r, 300));
+    return await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(new Uint8Array(fr.result)); fr.onerror = () => rej(new Error('This file could not be read. If it is in iCloud, open it once in Files so it downloads, then try again.')); fr.readAsArrayBuffer(f); });
+  }
+}
+window.readBytes = readBytes;
 async function openFile(f, handle) {
   fileHandle = handle || null; leafSrc = null;
   try {
-    let u = new Uint8Array(await f.arrayBuffer());
+    let u = await readBytes(f);
     if (u[0] !== 0x25 && (/\.html?$/i.test(f.name) || u[0] === 0x3c)) {
       const m = new TextDecoder().decode(u).match(/<script type="text\/plain" id="leafdata">\s*([A-Za-z0-9+\/=]+)\s*<\/script>/);
       if (!m) { say('This web page is not a Leaf document.'); return; }
@@ -740,7 +749,8 @@ function setMode(m, title) {
   if (m === 'pdf') $('#docTitle').textContent = title || 'PDF';
   if (m === 'start') { $('#docTitle').textContent = 'No file open'; setStatus([]); }
 }
-$('#fileIn').onchange = $('#fileIn2').onchange = e => { const f = e.target.files[0]; if (f) openFile(f); e.target.value = ''; };
+// Read the file before clearing the picker: Safari on iPhone drops access to a picked file once the picker is cleared.
+$('#fileIn').onchange = $('#fileIn2').onchange = e => { const f = e.target.files[0]; if (f) openFile(f).finally(() => { e.target.value = ''; }); else e.target.value = ''; };
 document.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('drop'); });
 document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('drop'); });
 document.addEventListener('drop', e => { e.preventDefault(); document.body.classList.remove('drop'); const f = e.dataTransfer.files[0]; if (f) openFile(f); });
