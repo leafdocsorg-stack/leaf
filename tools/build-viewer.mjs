@@ -25,6 +25,20 @@ html = html.replace('/*CORE*/', () => core).replace("'/*SAMPLE*/'", () => `'${sa
 const ptHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, 'viewer/pdf-tools.js'))).digest('hex').slice(0, 10);
 html = html.replace('<script src="pdf-tools.js"></script>', `<script src="pdf-tools.js?v=${ptHash}"></script>`);
 fs.writeFileSync(path.join(app, 'index.html'), html);
+// Self-contained reader at /app/reader.html. "Save as web page" fills it with a document so the .leaf.html file opens in any browser.
+{
+  let rd = fs.readFileSync(path.join(root, 'viewer/viewer.template.html'), 'utf8');
+  rd = rd.replace('/*CORE*/', () => core).replace("'/*SAMPLE*/'", "''")
+    .replace(/<link rel="manifest"[^>]*>\n?/, '')
+    .replace('}\n</script>\n<script src="pdf-tools.js"></script>', '});\n</script>')
+    .replace(/<script src="(jspdf|pdf|pdf-lib|qpdf|tesseract)[^"]*"><\/script>\n/g, '')
+    .replace('<script>\n{\nconst SAMPLE', "<script>\naddEventListener('DOMContentLoaded', () => {\nconst SAMPLE")
+    .replace('</head>', '<script>document.addEventListener("readystatechange", function () { if (document.readyState === "interactive") window.__LEAF_READER_SRC = "<!doctype html>\\n" + document.documentElement.outerHTML; });</script>\n<style>#pdfBtn,#leafBtn,#newDocBtn,.install{display:none!important}</style>\n</head>')
+    .replace('<body>', '<body>\n<script type="text/plain" id="leafdata"></script>')
+    .replace(/href="\/(?!\/)/g, 'href="https://leafdocs.org/');
+  if (rd.includes('pdf-tools.js') || !rd.includes('});\n</script>') || !rd.includes('id="leafdata"') || !rd.includes('DOMContentLoaded')) throw new Error('reader build failed');
+  fs.writeFileSync(path.join(app, 'reader.html'), rd);
+}
 for (const f of ['pdf-tools.js', 'manifest.webmanifest', 'sw.js', 'icon.svg', 'icon-192.png', 'icon-512.png']) fs.copyFileSync(path.join(root, 'viewer', f), path.join(app, f));
 for (const f of fs.readdirSync(path.join(root, 'viewer/vendor'))) fs.copyFileSync(path.join(root, 'viewer/vendor', f), path.join(app, f));
 
