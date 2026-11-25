@@ -1,0 +1,453 @@
+/* Leaf Viewer — PDF toolkit, phases 1–2.
+   View, annotate, fill forms on the page, create fields, sign, organize, merge, split,
+   stamps (watermark, page numbers, Bates), true redaction, passwords, OCR.
+   Built on PDF.js (Apache 2.0), pdf-lib (MIT), qpdf (Apache 2.0) and Tesseract.js (Apache 2.0). */
+{
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+const say = t => window.LeafApp.say(t);
+
+let srcs = [], pages = [], annots = {}, fields = [], values = {}, tool = 'none', sigPng = null, sigSize = null;
+let undo = [], uidN = 0, aidN = 0, fileName = 'document.pdf', widgets = {};
+const vps = {};
+const stamps = { wm: '', wmOpacity: 0.15, pn: false, pnFmt: 'Page {n} of {total}', pnPos: 'bc', bates: false, batesPrefix: 'ABC', batesStart: 1, batesDigits: 6 };
+const snap = () => { undo.push(JSON.stringify({ pages, annots })); if (undo.length > 60) undo.shift(); };
+const busy = t => { $('#busy').hidden = !t; $('#busy').textContent = t || ''; };
+
+/* ---------- qpdf (passwords) ---------- */
+async function qpdf(args, input) {
+  if (typeof window.Module !== 'function') throw new Error('The password engine did not load in this view.');
+  const m = await window.Module({ noInitialRun: true, locateFile: () => 'qpdf.wasm', print: () => {}, printErr: () => {} });
+  m.FS.writeFile('/in.pdf', input);
+  let code; try { code = m.callMain(args); } catch (e) { code = e && e.status != null ? e.status : 2; }
+  let out = null; try { out = m.FS.readFile('/out.pdf'); } catch (e) {}
+  return { code, out };
+}
+
+/* ---------- open ---------- */
+async function open(bytes, name) {
+  if (!window.pdfjsLib || !window.PDFLib) { say('The PDF engine did not load in this view.'); return false; }
+  bytes = await unlockIfNeeded(bytes, name); if (!bytes) return false;
+  srcs = []; pages = []; annots = {}; undo = []; values = {}; fields = []; widgets = {}; fileName = name || 'document.pdf';
+  Object.assign(stamps, { wm: '', wmOpacity: 0.15, pn: false, pnFmt: 'Page {n} of {total}', pnPos: 'bc', bates: false, batesPrefix: 'ABC', batesStart: 1, batesDigits: 6 }); $('#pwSet').value = ''; $('#ocrResult').textContent = '';
+  await addSource(bytes, name);
+  await readFields();
+  window.LeafApp.setMode('pdf', fileName);
+  setTool('none'); renderAll(); renderFields(); syncStampUI();
+  return true;
+}
+async function unlockIfNeeded(bytes, name) {
+  try { const d = await pdfjsLib.getDocument({ data: bytes.slice() }).promise; await d.destroy(); return bytes; }
+  catch (err) {
+    if (!err || err.name !== 'PasswordException') throw err;
+    for (let tries = 0; tries < 3; tries++) {
+      const pw = await askPassword(name, tries > 0);
+      if (pw == null) return null;
+      busy('Unlocking…'); const r = await qpdf(['--password=' + pw, '--decrypt', '/in.pdf', '/out.pdf'], bytes).catch(e => ({ code: 2, err: e })); busy('');
+      if (r.err) { say(r.err.message); return null; }
+      if (r.code === 0 && r.out) { say('Unlocked. The password is removed in this copy; you can add one again when saving.'); return r.out; }
+    }
+    say('That password did not work.'); return null;
+  }
+}
+function askPassword(name, retry) {
+  return new Promise(res => {
+    const d = $('#pwDlg'); $('#pwTitle').textContent = (retry ? 'Wrong password. ' : '') + name + ' is password-protected';
+    $('#pwIn').value = ''; d.showModal(); $('#pwIn').focus();
+    const done = v => { d.close(); $('#pwOk').onclick = $('#pwCancel').onclick = null; res(v); };
+    $('#pwOk').onclick = e => { e.preventDefault(); done($('#pwIn').value); };
+    $('#pwCancel').onclick = () => done(null);
+  });
+}
+async function addSource(bytes, name) {
+  const doc = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+  const si = srcs.push({ name, bytes, doc }) - 1;
+  for (let i = 0; i < doc.numPages; i++) pages.push({ uid: 'p' + (++uidN), src: si, idx: i, rot: 0, sel: false });
+  if (si === 0) for (let i = 0; i < doc.numPages; i++) {
+    const anns = await (await doc.getPage(i + 1)).getAnnotations();
+    widgets[i] = anns.filter(a => a.subtype === 'Widget' && a.fieldName && !a.hidden).map(a => ({ name: a.fieldName, rect: a.rect, ft: a.fieldType, check: !!a.checkBox, radio: !!a.radioButton, exp: a.buttonValue, options: (a.options || []).map(o => o.displayValue || o.exportValue) }));
+  }
+  return doc.numPages;
+}
+async function readFields() {
+  try {
+    const d = await PDFLib.PDFDocument.load(srcs[0].bytes, { ignoreEncryption: true }), L = PDFLib;
+    fields = d.getForm().getFields().map(f => {
+      const type = f instanceof L.PDFTextField ? 'text' : f instanceof L.PDFCheckBox ? 'check' : f instanceof L.PDFDropdown ? 'drop' : f instanceof L.PDFOptionList ? 'list' : f instanceof L.PDFRadioGroup ? 'radio' : 'other', name = f.getName();
+      let options = [], value = '';
+      try {
+        if (type === 'text') value = f.getText() || '';
+        else if (type === 'check') value = f.isChecked();
+        else if (type === 'drop' || type === 'list') { options = f.getOptions(); value = (f.getSelected() || [])[0] || ''; }
+        else if (type === 'radio') { options = f.getOptions(); value = f.getSelected() || ''; }
+      } catch (e) {}
+      values[name] = value;
+      return { name, type, options };
+    }).filter(f => f.type !== 'other');
+  } catch (e) { fields = []; }
+}
+
+/* ---------- rendering ---------- */
+function renderAll() {
+  $('#pdfPages').innerHTML = pages.map((p, i) => '<div class="ppage" data-uid="' + p.uid + '"><canvas></canvas><svg class="ov" data-uid="' + p.uid + '"></svg><div class="fl" data-uid="' + p.uid + '"></div><span class="pnum">' + (i + 1) + ' / ' + pages.length + '</span></div>').join('') || '<p class="note">No pages. Add a PDF to start.</p>';
+  $('#pdfThumbs').innerHTML = pages.map((p, i) => '<div class="thumb' + (p.sel ? ' sel' : '') + '" data-uid="' + p.uid + '"><label class="tsel"><input type="checkbox" data-act="sel"' + (p.sel ? ' checked' : '') + ' aria-label="Select page ' + (i + 1) + '"> ' + (i + 1) + (srcs.length > 1 ? ' <small>' + esc(srcs[p.src].name.slice(0, 14)) + '</small>' : '') + '</label><canvas></canvas><div class="tact"><button data-act="up" aria-label="Move page ' + (i + 1) + ' up"' + (i ? '' : ' disabled') + '>↑</button><button data-act="down" aria-label="Move page ' + (i + 1) + ' down"' + (i < pages.length - 1 ? '' : ' disabled') + '>↓</button><button data-act="rot" aria-label="Rotate page ' + (i + 1) + '">⟳</button><button data-act="del" aria-label="Delete page ' + (i + 1) + '">✕</button></div></div>').join('');
+  $('#pgCount').textContent = pages.length + (pages.length === 1 ? ' page' : ' pages') + (srcs.length > 1 ? ' from ' + srcs.length + ' files' : '');
+  pages.forEach(p => { renderPage(p); renderThumb(p); });
+}
+async function pdfPage(p) { return srcs[p.src].doc.getPage(p.idx + 1); }
+async function renderPage(p) {
+  const el = document.querySelector('.ppage[data-uid="' + p.uid + '"]'); if (!el) return;
+  const page = await pdfPage(p), rotation = (page.rotate + p.rot) % 360;
+  const base = page.getViewport({ scale: 1, rotation }), W = Math.min(el.parentElement.clientWidth || 800, 860);
+  const vp = page.getViewport({ scale: W / base.width, rotation }); vps[p.uid] = vp;
+  const c = el.querySelector('canvas'), dpr = Math.min(window.devicePixelRatio || 1, 2);
+  c.width = Math.floor(vp.width * dpr); c.height = Math.floor(vp.height * dpr);
+  el.style.width = vp.width + 'px'; el.style.height = vp.height + 'px';
+  await page.render({ canvasContext: c.getContext('2d'), viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null }).promise;
+  drawOverlay(p.uid); drawFieldInputs(p);
+}
+async function renderThumb(p) {
+  const el = document.querySelector('.thumb[data-uid="' + p.uid + '"] canvas'); if (!el) return;
+  const page = await pdfPage(p), rotation = (page.rotate + p.rot) % 360;
+  const base = page.getViewport({ scale: 1, rotation }), vp = page.getViewport({ scale: 120 / base.width, rotation });
+  el.width = vp.width; el.height = vp.height;
+  await page.render({ canvasContext: el.getContext('2d'), viewport: vp }).promise;
+}
+/* live form inputs over the PDF's own fields */
+function drawFieldInputs(p) {
+  const box = document.querySelector('.fl[data-uid="' + p.uid + '"]'), vp = vps[p.uid]; if (!box || !vp) return;
+  const ws = p.src === 0 ? (widgets[p.idx] || []) : [];
+  box.innerHTML = ws.map(w => {
+    const [x1, y1, x2, y2] = vp.convertToViewportRectangle(w.rect), l = Math.min(x1, x2), t = Math.min(y1, y2), wd = Math.abs(x2 - x1), ht = Math.abs(y2 - y1);
+    const pos = 'left:' + l + 'px;top:' + t + 'px;width:' + wd + 'px;height:' + ht + 'px;font-size:' + Math.max(9, Math.min(ht * 0.62, 16)) + 'px';
+    const v = values[w.name], nm = esc(w.name);
+    if (w.ft === 'Btn' && w.check) return '<input type="checkbox" class="pf" data-f="' + nm + '" aria-label="' + nm + '" style="' + pos + '"' + (v ? ' checked' : '') + '>';
+    if (w.ft === 'Btn' && w.radio) return '<input type="radio" class="pf" name="r-' + nm + '" data-f="' + nm + '" data-v="' + esc(w.exp || '') + '" aria-label="' + nm + '" style="' + pos + '"' + (v && v === w.exp ? ' checked' : '') + '>';
+    if (w.ft === 'Ch') return '<select class="pf" data-f="' + nm + '" aria-label="' + nm + '" style="' + pos + '"><option value=""></option>' + w.options.map(o => '<option' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>';
+    if (w.ft === 'Tx') return '<input class="pf" data-f="' + nm + '" aria-label="' + nm + '" style="' + pos + '" value="' + esc(v || '') + '">';
+    return '';
+  }).join('');
+}
+function setValue(name, v, from) {
+  values[name] = v;
+  document.querySelectorAll('[data-f="' + CSS.escape(name) + '"]').forEach(el => {
+    if (el === from) return;
+    if (el.type === 'checkbox') el.checked = !!v; else if (el.type === 'radio') el.checked = el.dataset.v === v; else el.value = v || '';
+  });
+}
+const onField = e => {
+  const el = e.target.closest('#pdfMain [data-f]'); if (!el) return;
+  setValue(el.dataset.f, el.type === 'checkbox' ? el.checked : el.type === 'radio' ? el.dataset.v : el.value, el);
+};
+document.addEventListener('input', onField); document.addEventListener('change', onField);
+
+function drawOverlay(uid) {
+  const svg = document.querySelector('svg.ov[data-uid="' + uid + '"]'), vp = vps[uid]; if (!svg || !vp) return;
+  svg.setAttribute('viewBox', '0 0 ' + vp.width + ' ' + vp.height);
+  const V = (x, y) => vp.convertToViewportPoint(x, y);
+  const R = a => { const [x1, y1] = V(a.x, a.y), [x2, y2] = V(a.x + a.w, a.y + a.h); return { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) }; };
+  let out = (annots[uid] || []).map(a => {
+    if (a.t === 'hl') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="#ffd633" fill-opacity=".35"/>'; }
+    if (a.t === 'img') { const r = R(a); return '<image href="' + a.png + '" x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" preserveAspectRatio="none"/>'; }
+    if (a.t === 'redact') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="#000" fill-opacity=".55" stroke="#d11" stroke-width="1.5"/>'; }
+    if (a.t === 'newfield') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="#0b5d63" fill-opacity=".08" stroke="#0b5d63" stroke-dasharray="4 3"/><text x="' + (r.x + 4) + '" y="' + (r.y - 4) + '" font-size="11" fill="#0b5d63" font-family="Inter,sans-serif">' + esc(a.ft + ': ' + a.name) + '</text>'; }
+    if (a.t === 'ink') return '<polyline fill="none" stroke="#0b5d63" stroke-width="' + (1.6 * vp.scale) + '" stroke-linecap="round" stroke-linejoin="round" points="' + a.pts.map(pt => V(pt[0], pt[1]).join(',')).join(' ') + '"/>';
+    if (a.t === 'text') { const [x, y] = V(a.x, a.y); return '<text x="' + x + '" y="' + y + '" font-size="' + (a.s * vp.scale) + '" font-family="Helvetica,Arial,sans-serif" fill="#111">' + esc(a.txt) + '</text>'; }
+    return '';
+  }).join('');
+  out += stampPreview(uid, vp);
+  if (draft && draft.uid === uid) {
+    if (draft.t === 'ink') out += '<polyline fill="none" stroke="#0b5d63" stroke-width="2" points="' + draft.pts.map(pt => V(pt[0], pt[1]).join(',')).join(' ') + '"/>';
+    else { const [x1, y1] = V(draft.x0, draft.y0), [x2, y2] = V(draft.x1, draft.y1); const col = draft.t === 'redact' ? '#d11' : draft.t === 'field' ? '#0b5d63' : '#c9a400'; out += '<rect x="' + Math.min(x1, x2) + '" y="' + Math.min(y1, y2) + '" width="' + Math.abs(x2 - x1) + '" height="' + Math.abs(y2 - y1) + '" fill="' + col + '" fill-opacity=".15" stroke="' + col + '" stroke-dasharray="4 3"/>'; }
+  }
+  svg.innerHTML = out;
+}
+function stampTexts(i, total) {
+  const t = [];
+  if (stamps.pn) t.push({ k: 'pn', s: stamps.pnFmt.replace('{n}', i + 1).replace('{total}', total) });
+  if (stamps.bates) t.push({ k: 'bates', s: stamps.batesPrefix + String(stamps.batesStart + i).padStart(stamps.batesDigits, '0') });
+  return t;
+}
+function stampPreview(uid, vp) {
+  const i = pages.findIndex(p => p.uid === uid); if (i < 0) return '';
+  let o = '';
+  if (stamps.wm) o += '<text x="' + vp.width / 2 + '" y="' + vp.height / 2 + '" text-anchor="middle" dominant-baseline="middle" font-size="' + (60 * vp.scale) + '" font-weight="700" font-family="Helvetica,Arial,sans-serif" fill="#777" fill-opacity="' + stamps.wmOpacity + '" transform="rotate(-45 ' + vp.width / 2 + ' ' + vp.height / 2 + ')">' + esc(stamps.wm) + '</text>';
+  for (const s of stampTexts(i, pages.length)) {
+    const fs = 9 * vp.scale, y = vp.height - 22 * vp.scale;
+    if (s.k === 'bates') o += '<text x="' + (vp.width - 36 * vp.scale) + '" y="' + y + '" text-anchor="end" font-size="' + fs + '" font-family="Helvetica,Arial,sans-serif" fill="#222">' + esc(s.s) + '</text>';
+    else { const pos = stamps.pnPos, x = pos === 'bl' ? 36 * vp.scale : pos === 'br' ? vp.width - 36 * vp.scale : vp.width / 2; o += '<text x="' + x + '" y="' + (stamps.bates && pos === 'br' ? y - 12 * vp.scale : y) + '" text-anchor="' + (pos === 'bl' ? 'start' : pos === 'br' ? 'end' : 'middle') + '" font-size="' + fs + '" font-family="Helvetica,Arial,sans-serif" fill="#222">' + esc(s.s) + '</text>'; }
+  }
+  return o;
+}
+const redrawOverlays = () => pages.forEach(p => drawOverlay(p.uid));
+
+/* ---------- tools ---------- */
+function setTool(t) {
+  tool = t;
+  document.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t));
+  $('#pdfPages').dataset.tool = t;
+  const hints = { none: 'Pick a tool, then work on the page. Form fields can be typed into directly.', hl: 'Drag across text to highlight it.', ink: 'Draw freely on the page.', text: 'Type your text below, then click where it goes.', sign: sigPng ? 'Click where your signature goes.' : 'Create your signature in the Sign tab first.', redact: 'Drag over anything to remove. It is permanently removed when you save.', field: 'Drag a box where the new field goes.' };
+  $('#toolHint').textContent = hints[t] || ''; $('#redactHint').textContent = t === 'redact' ? hints.redact : ''; $('#fieldHint').textContent = t === 'field' ? hints.field : '';
+}
+function pdfPoint(e) {
+  const svg = e.target.closest('svg.ov'); if (!svg) return null;
+  const uid = svg.dataset.uid, vp = vps[uid], r = svg.getBoundingClientRect();
+  const [x, y] = vp.convertToPdfPoint((e.clientX - r.left) * vp.width / r.width, (e.clientY - r.top) * vp.height / r.height);
+  return { uid, x, y };
+}
+const addAnn = (uid, a) => { snap(); a.id = 'a' + (++aidN); (annots[uid] = annots[uid] || []).push(a); drawOverlay(uid); };
+let draft = null;
+$('#pdfPages').addEventListener('pointerdown', e => {
+  if (tool === 'none' || e.target.closest('.pf')) return; const pt = pdfPoint(e); if (!pt) return; e.preventDefault();
+  if (tool === 'hl' || tool === 'redact' || tool === 'field') draft = { t: tool, uid: pt.uid, x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
+  else if (tool === 'ink') draft = { t: 'ink', uid: pt.uid, pts: [[pt.x, pt.y]] };
+  else if (tool === 'text') {
+    const txt = $('#annText').value.trim(); if (!txt) { $('#annText').focus(); say('Type the text first, then click on the page.'); return; }
+    addAnn(pt.uid, { t: 'text', x: pt.x, y: pt.y, s: +$('#annSize').value || 12, txt });
+  } else if (tool === 'sign') {
+    if (!sigPng) { say('Create your signature in the Sign tab first.'); return; }
+    const w = 170, h = w * sigSize.h / sigSize.w;
+    addAnn(pt.uid, { t: 'img', x: pt.x - w / 2, y: pt.y - h / 2, w, h, png: sigPng });
+  }
+  if (draft) e.target.closest('svg').setPointerCapture(e.pointerId);
+});
+$('#pdfPages').addEventListener('pointermove', e => {
+  if (!draft) return; const pt = pdfPoint(e); if (!pt || pt.uid !== draft.uid) return;
+  if (draft.t === 'ink') draft.pts.push([pt.x, pt.y]); else { draft.x1 = pt.x; draft.y1 = pt.y; }
+  drawOverlay(draft.uid);
+});
+$('#pdfPages').addEventListener('pointerup', () => {
+  if (!draft) return; const d = draft; draft = null;
+  const box = { x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w: Math.abs(d.x1 - d.x0), h: Math.abs(d.y1 - d.y0) };
+  if ((d.t === 'hl' || d.t === 'redact') && box.w > 3 && box.h > 3) addAnn(d.uid, { t: d.t, ...box });
+  else if (d.t === 'field' && box.w > 6 && box.h > 6) {
+    const ft = $('#nfType').value, used = new Set([...fields.map(f => f.name), ...Object.values(annots).flat().filter(a => a.t === 'newfield').map(a => a.name)]);
+    let name = ($('#nfName').value.trim() || 'field').replace(/[^\w\-]+/g, '_'), n = name, k = 2; while (used.has(n)) n = name + '_' + k++;
+    const options = ft === 'dropdown' ? $('#nfOptions').value.split(',').map(s => s.trim()).filter(Boolean) : [];
+    if (ft === 'dropdown' && !options.length) { say('Add the dropdown options first, separated by commas.'); drawOverlay(d.uid); return; }
+    addAnn(d.uid, { t: 'newfield', ...box, ft, name: n, options }); $('#nfName').value = '';
+  }
+  else if (d.t === 'ink' && d.pts.length > 1) addAnn(d.uid, { t: 'ink', pts: d.pts });
+  else drawOverlay(d.uid);
+});
+document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+document.querySelectorAll('.undoBtn').forEach(b => b.onclick = () => { const s = undo.pop(); if (!s) return; const o = JSON.parse(s); pages = o.pages; annots = o.annots; renderAll(); });
+$('#nfType').onchange = () => { $('#nfOptWrap').hidden = $('#nfType').value !== 'dropdown'; };
+
+/* ---------- pages: organize, merge, split ---------- */
+$('#pdfThumbs').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const uid = b.closest('.thumb').dataset.uid, i = pages.findIndex(p => p.uid === uid), act = b.dataset.act;
+  if (act === 'sel') { pages[i].sel = b.checked; b.closest('.thumb').classList.toggle('sel', b.checked); return; }
+  snap();
+  if (act === 'up' && i > 0) [pages[i - 1], pages[i]] = [pages[i], pages[i - 1]];
+  else if (act === 'down' && i < pages.length - 1) [pages[i + 1], pages[i]] = [pages[i], pages[i + 1]];
+  else if (act === 'rot') pages[i].rot = (pages[i].rot + 90) % 360;
+  else if (act === 'del') { if (pages.length === 1) { undo.pop(); say('A PDF needs at least one page.'); return; } pages.splice(i, 1); }
+  renderAll();
+});
+$('#addPdf').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { let b = new Uint8Array(await f.arrayBuffer()); b = await unlockIfNeeded(b, f.name); if (!b) return; snap(); const n = await addSource(b, f.name); renderAll(); say('Added ' + n + ' pages from ' + f.name + ' at the end.'); }
+  catch (err) { say('Could not add that file: ' + err.message); }
+};
+$('#selAll').onclick = () => { const all = pages.every(p => p.sel); pages.forEach(p => p.sel = !all); renderAll(); };
+$('#extractBtn').onclick = async () => {
+  const sel = pages.filter(p => p.sel); if (!sel.length) { say('Tick the pages you want to extract in the page list first.'); return; }
+  await saveBytes(await build(sel), base() + '-pages.pdf');
+};
+$('#splitBtn').onclick = async () => {
+  if (pages.length < 2) { say('There is only one page.'); return; }
+  const half = Math.ceil(pages.length / 2);
+  await saveBytes(await build(pages.slice(0, half)), base() + '-part1.pdf');
+  await saveBytes(await build(pages.slice(half)), base() + '-part2.pdf');
+};
+
+/* ---------- forms panel ---------- */
+function renderFields() {
+  if (!fields.length) { $('#formList').innerHTML = '<p class="note">This PDF has no fillable fields. Use Create fields to add some.</p>'; return; }
+  $('#formList').innerHTML = fields.map((f, i) => {
+    const id = 'ff' + i, v = values[f.name];
+    if (f.type === 'check') return '<label class="ck"><input type="checkbox" id="' + id + '" data-f="' + esc(f.name) + '"' + (v ? ' checked' : '') + '> ' + esc(f.name) + '</label>';
+    if (f.options.length) return '<label class="f" for="' + id + '">' + esc(f.name) + '</label><select class="t" id="' + id + '" data-f="' + esc(f.name) + '"><option value=""></option>' + f.options.map(o => '<option' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>';
+    return '<label class="f" for="' + id + '">' + esc(f.name) + '</label><input class="t" id="' + id + '" data-f="' + esc(f.name) + '" value="' + esc(v || '') + '">';
+  }).join('');
+}
+
+/* ---------- stamps ---------- */
+function syncStampUI() {
+  $('#wmText').value = stamps.wm; $('#wmOpacity').value = stamps.wmOpacity; $('#pnOn').checked = stamps.pn; $('#pnFmt').value = stamps.pnFmt; $('#pnPos').value = stamps.pnPos;
+  $('#batesOn').checked = stamps.bates; $('#batesPrefix').value = stamps.batesPrefix; $('#batesStart').value = stamps.batesStart; $('#batesDigits').value = stamps.batesDigits;
+}
+['wmText', 'wmOpacity', 'pnOn', 'pnFmt', 'pnPos', 'batesOn', 'batesPrefix', 'batesStart', 'batesDigits'].forEach(id => ['input', 'change'].forEach(ev => $('#' + id).addEventListener(ev, () => {
+  stamps.wm = $('#wmText').value; stamps.wmOpacity = +$('#wmOpacity').value; stamps.pn = $('#pnOn').checked; stamps.pnFmt = $('#pnFmt').value || 'Page {n} of {total}'; stamps.pnPos = $('#pnPos').value;
+  stamps.bates = $('#batesOn').checked; stamps.batesPrefix = $('#batesPrefix').value; stamps.batesStart = Math.max(0, parseInt($('#batesStart').value, 10) || 1); stamps.batesDigits = Math.min(12, Math.max(1, parseInt($('#batesDigits').value, 10) || 6));
+  redrawOverlays();
+})));
+
+/* ---------- signature ---------- */
+const pad = $('#sigPad'), pctx = pad.getContext('2d'); let drawing = false, drew = false;
+function padReset() { pctx.clearRect(0, 0, pad.width, pad.height); pctx.lineWidth = 3; pctx.lineCap = 'round'; pctx.strokeStyle = '#10243f'; drew = false; }
+padReset();
+const padPt = e => { const r = pad.getBoundingClientRect(); return [(e.clientX - r.left) * pad.width / r.width, (e.clientY - r.top) * pad.height / r.height]; };
+pad.addEventListener('pointerdown', e => { drawing = true; drew = true; pad.setPointerCapture(e.pointerId); const [x, y] = padPt(e); pctx.beginPath(); pctx.moveTo(x, y); });
+pad.addEventListener('pointermove', e => { if (!drawing) return; const [x, y] = padPt(e); pctx.lineTo(x, y); pctx.stroke(); });
+pad.addEventListener('pointerup', () => { drawing = false; });
+$('#sigClear').onclick = padReset;
+function trimmed(canvas) {
+  const ctx = canvas.getContext('2d'), d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  let x0 = canvas.width, y0 = canvas.height, x1 = 0, y1 = 0;
+  for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++) if (d[(y * canvas.width + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
+  if (x1 <= x0) return null;
+  const o = document.createElement('canvas'); o.width = x1 - x0 + 12; o.height = y1 - y0 + 12;
+  o.getContext('2d').drawImage(canvas, x0 - 6, y0 - 6, o.width, o.height, 0, 0, o.width, o.height);
+  return o;
+}
+$('#sigUseDraw').onclick = () => { if (!drew) { say('Draw your signature in the box first.'); return; } useSig(trimmed(pad)); };
+$('#sigUseType').onclick = async () => {
+  const name = $('#sigName').value.trim(); if (!name) { $('#sigName').focus(); say('Type your name first.'); return; }
+  try { await document.fonts.load('64px "Caveat"'); } catch (e) {}
+  const c = document.createElement('canvas'); c.width = 900; c.height = 200; const x = c.getContext('2d');
+  x.font = '96px "Caveat", "Segoe Script", cursive'; x.fillStyle = '#10243f'; x.textBaseline = 'middle'; x.fillText(name, 20, 100);
+  useSig(trimmed(c));
+};
+function useSig(c) {
+  if (!c) { say('That signature looks empty.'); return; }
+  sigPng = c.toDataURL('image/png'); sigSize = { w: c.width, h: c.height };
+  $('#sigPreview').innerHTML = '<img alt="Your signature" src="' + sigPng + '">';
+  setTool('sign'); say('Signature ready. Click on the page where it should go. You can place it more than once.');
+}
+
+/* ---------- OCR ---------- */
+let ocrWorker = null;
+$('#ocrBtn').onclick = async () => {
+  if (!window.Tesseract) { say('The text recognition engine did not load in this view.'); return; }
+  const list = pages.filter(p => p.sel).length ? pages.filter(p => p.sel) : pages;
+  try {
+    busy('Starting text recognition…');
+    if (!ocrWorker) ocrWorker = await Tesseract.createWorker('eng', 1, { workerPath: new URL('tesseract-worker.min.js', location.href).href, corePath: new URL('./', location.href).href, langPath: new URL('./', location.href).href, gzip: true, workerBlobURL: false });
+    let found = 0;
+    for (let k = 0; k < list.length; k++) {
+      const p = list[k]; busy('Reading page ' + (k + 1) + ' of ' + list.length + '…');
+      const page = await pdfPage(p), vp = page.getViewport({ scale: 2.5, rotation: page.rotate });
+      const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      const { data } = await ocrWorker.recognize(c, {}, { blocks: true });
+      const lines = (data.blocks || []).flatMap(b => b.paragraphs || []).flatMap(pa => pa.lines || []);
+      annots[p.uid] = (annots[p.uid] || []).filter(a => a.t !== 'ocr');
+      for (const ln of lines) {
+        const txt = (ln.text || '').trim(); if (!txt || ln.confidence < 40) continue;
+        const [x0, y0] = vp.convertToPdfPoint(ln.bbox.x0, ln.bbox.y1), [x1, y1] = vp.convertToPdfPoint(ln.bbox.x1, ln.bbox.y0);
+        (annots[p.uid] = annots[p.uid] || []).push({ id: 'a' + (++aidN), t: 'ocr', x: Math.min(x0, x1), y: Math.min(y0, y1), w: Math.abs(x1 - x0), h: Math.abs(y1 - y0), txt });
+        found++;
+      }
+    }
+    busy(''); $('#ocrResult').textContent = 'Found ' + found + ' lines of text on ' + list.length + (list.length === 1 ? ' page' : ' pages') + '. They are added as an invisible, searchable text layer when you save.';
+  } catch (err) { busy(''); say('Text recognition could not run here: ' + (err && err.message || err)); }
+};
+
+/* ---------- build and save ---------- */
+const base = () => fileName.replace(/\.pdf$/i, '').replace(/[^\w\- ]+/g, '').trim() || 'document';
+async function rasterize(srcDoc, idx, reds) {
+  const page = await srcDoc.getPage(idx + 1), vp = page.getViewport({ scale: 200 / 72, rotation: 0 });
+  const c = document.createElement('canvas'); c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height); const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  ctx.fillStyle = '#000';
+  for (const r of reds) { const [a, b, cc, d] = vp.convertToViewportRectangle([r.x, r.y, r.x + r.w, r.y + r.h]); ctx.fillRect(Math.min(a, cc) - 1, Math.min(b, d) - 1, Math.abs(cc - a) + 2, Math.abs(d - b) + 2); }
+  const view = page.view;
+  return { png: await new Promise(res => c.toBlob(b => b.arrayBuffer().then(res), 'image/png')), w: view[2] - view[0], h: view[3] - view[1], ox: view[0], oy: view[1] };
+}
+async function build(list) {
+  const { PDFDocument, StandardFonts, rgb, degrees } = PDFLib;
+  const loaded = await Promise.all(srcs.map(s => PDFDocument.load(s.bytes, { ignoreEncryption: true })));
+  const anyRedact = list.some(p => (annots[p.uid] || []).some(a => a.t === 'redact'));
+  const identity = !anyRedact && list.length === srcs[0].doc.numPages && list.every((p, i) => p.src === 0 && p.idx === i);
+  if (fields.length) {
+    const form = loaded[0].getForm();
+    for (const f of fields) {
+      const v = values[f.name];
+      try {
+        if (f.type === 'text') form.getTextField(f.name).setText(v ? String(v) : '');
+        else if (f.type === 'check') v ? form.getCheckBox(f.name).check() : form.getCheckBox(f.name).uncheck();
+        else if (f.type === 'drop' && v) form.getDropdown(f.name).select(v);
+        else if (f.type === 'list' && v) form.getOptionList(f.name).select(v);
+        else if (f.type === 'radio' && v) form.getRadioGroup(f.name).select(v);
+      } catch (e) {}
+    }
+    if (!identity || $('#flatten').checked) form.flatten();
+  }
+  // redacted pages are rebuilt as images from the filled, flattened source, so nothing under the boxes survives
+  let flatDoc0 = null;
+  if (anyRedact) flatDoc0 = await pdfjsLib.getDocument({ data: await loaded[0].save() }).promise;
+  let out, outPages;
+  if (identity) { out = loaded[0]; outPages = out.getPages(); }
+  else {
+    out = await PDFDocument.create(); outPages = [];
+    for (const p of list) {
+      const reds = (annots[p.uid] || []).filter(a => a.t === 'redact');
+      if (reds.length) {
+        const srcDoc = p.src === 0 ? flatDoc0 : srcs[p.src].doc, r = await rasterize(srcDoc, p.idx, reds);
+        const srcPage = loaded[p.src].getPage(p.idx), pg = out.addPage([r.w, r.h]);
+        pg.setMediaBox(r.ox, r.oy, r.w, r.h);
+        pg.drawImage(await out.embedPng(r.png), { x: r.ox, y: r.oy, width: r.w, height: r.h });
+        pg.setRotation(srcPage.getRotation());
+        outPages.push(pg);
+      } else { const [cp] = await out.copyPages(loaded[p.src], [p.idx]); outPages.push(out.addPage(cp)); }
+    }
+  }
+  const font = await out.embedFont(StandardFonts.Helvetica), fontB = await out.embedFont(StandardFonts.HelveticaBold), imgs = {};
+  const newFields = [];
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i], pg = outPages[i];
+    if (p.rot) pg.setRotation(degrees((pg.getRotation().angle + p.rot) % 360));
+    for (const a of annots[p.uid] || []) {
+      if (a.t === 'hl') pg.drawRectangle({ x: a.x, y: a.y, width: a.w, height: a.h, color: rgb(1, 0.84, 0.2), opacity: 0.35 });
+      else if (a.t === 'ink') for (let k = 1; k < a.pts.length; k++) pg.drawLine({ start: { x: a.pts[k - 1][0], y: a.pts[k - 1][1] }, end: { x: a.pts[k][0], y: a.pts[k][1] }, thickness: 1.6, color: rgb(0.04, 0.36, 0.39) });
+      else if (a.t === 'text') pg.drawText(a.txt, { x: a.x, y: a.y, size: a.s, font, color: rgb(0.07, 0.07, 0.07) });
+      else if (a.t === 'img') { imgs[a.png] = imgs[a.png] || await out.embedPng(a.png); pg.drawImage(imgs[a.png], { x: a.x, y: a.y, width: a.w, height: a.h }); }
+      else if (a.t === 'ocr') { let size = Math.max(4, a.h * 0.8); const w = font.widthOfTextAtSize(a.txt, size); if (w > 0) size = Math.max(2, size * Math.min(1.3, a.w / w)); try { pg.drawText(a.txt, { x: a.x, y: a.y + a.h * 0.15, size, font, opacity: 0 }); } catch (e) {} }
+      else if (a.t === 'newfield') newFields.push({ pg, a });
+    }
+    const { x: bx, y: by, width: bw, height: bh } = pg.getMediaBox();
+    if (stamps.wm) {
+      const size = 60, tw = fontB.widthOfTextAtSize(stamps.wm, size), cx = bx + bw / 2, cy = by + bh / 2, r = Math.PI / 4;
+      pg.drawText(stamps.wm, { x: cx - (tw / 2) * Math.cos(r) + (size / 3) * Math.sin(r), y: cy - (tw / 2) * Math.sin(r) - (size / 3) * Math.cos(r), size, font: fontB, color: rgb(0.47, 0.47, 0.47), opacity: stamps.wmOpacity, rotate: degrees(45) });
+    }
+    for (const s of stampTexts(i, list.length)) {
+      const size = 9, tw = font.widthOfTextAtSize(s.s, size), y = by + 22 - size * 0.3;
+      if (s.k === 'bates') pg.drawText(s.s, { x: bx + bw - 36 - tw, y, size, font, color: rgb(0.13, 0.13, 0.13) });
+      else { const pos = stamps.pnPos, x = pos === 'bl' ? bx + 36 : pos === 'br' ? bx + bw - 36 - tw : bx + (bw - tw) / 2; pg.drawText(s.s, { x, y: stamps.bates && pos === 'br' ? y + 12 : y, size, font, color: rgb(0.13, 0.13, 0.13) }); }
+    }
+  }
+  if (newFields.length) {
+    const form = out.getForm();
+    for (const { pg, a } of newFields) {
+      try {
+        const opts = { x: a.x, y: a.y, width: a.w, height: a.h, font };
+        if (a.ft === 'text') form.createTextField(a.name).addToPage(pg, opts);
+        else if (a.ft === 'checkbox') form.createCheckBox(a.name).addToPage(pg, { x: a.x, y: a.y, width: Math.min(a.w, a.h), height: Math.min(a.w, a.h) });
+        else if (a.ft === 'dropdown') { const d = form.createDropdown(a.name); d.addOptions(a.options); d.addToPage(pg, opts); }
+      } catch (e) { console.warn('field', a.name, e); }
+    }
+  }
+  if (anyRedact) { out.setTitle(''); out.setAuthor(''); out.setSubject(''); out.setKeywords([]); out.setCreator(''); }
+  out.setProducer('Leaf Viewer (open source)');
+  let bytes = await out.save({ useObjectStreams: true });
+  const pw = $('#pwSet').value;
+  if (pw) {
+    const r = await qpdf(['--encrypt', pw, pw + '-owner-' + Math.random().toString(36).slice(2), '256', '--', '/in.pdf', '/out.pdf'], bytes);
+    if (r.code !== 0 || !r.out) throw new Error('password protection failed');
+    bytes = r.out;
+  }
+  return bytes;
+}
+async function saveBytes(bytes, name) { await window.LeafApp.offer(name, bytes); }
+$('#savePdfBtn').onclick = async () => {
+  try { busy('Building your PDF…'); const bytes = await build(pages); busy(''); await saveBytes(bytes, base() + '-edited.pdf'); }
+  catch (err) { busy(''); say('Could not build the PDF: ' + err.message); }
+};
+
+window.PDFWS = { open, build: () => build(pages), state: () => ({ pages, annots, values, fields, stamps }) };
+}

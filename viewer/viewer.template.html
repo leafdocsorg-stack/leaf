@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leaf Viewer: open, edit and sign documents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a calm, precise working tool, like a good desktop document app.
+   IDEA: a sheet of paper on a desk, with the file's insides laid open beside it.
+   PICTURE: the live document pages themselves, large, filling the left side.
+   COLOUR and TYPE: neutral desk grey, white paper, one deep teal for actions and status; Inter for the app, Helvetica on the page.
+   LAYOUT: toolbar on top, pages left, inspector right; stacks below 900px. */
+:root{color-scheme:light dark;--desk:light-dark(#e6e8eb,#121518);--panel:light-dark(#ffffff,#1b1f24);--ink:light-dark(#16191d,#e8eaed);--mute:light-dark(#5b636c,#9aa3ad);--line:light-dark(#d9dde2,#2c3238);--acc:light-dark(#0b5d63,#5cc3c9);--acc-ink:light-dark(#ffffff,#0b1d1f);--good:light-dark(#1d6b3a,#6fd39a);--warn:light-dark(#8a5a00,#f0c062);--bad:light-dark(#a12b2b,#ff8a8a);--chip:light-dark(#eef1f3,#242a30)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--desk);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
+header{background:var(--panel);border-bottom:1px solid var(--line);padding:12px max(2vw,16px);display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;position:sticky;top:0;z-index:5}
+.brand{font-weight:700;font-size:15px;letter-spacing:-.01em}.brand span{color:var(--mute);font-weight:500}
+.doc-title{font-weight:600;font-size:15px;flex:1 1 220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tools{display:flex;flex-wrap:wrap;gap:8px}
+button,.btn{font:500 14px Inter,system-ui,sans-serif;min-height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+button:hover,.btn:hover{border-color:var(--acc)}button:focus-visible,.btn:focus-within,input:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+button.primary{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}button[aria-pressed=true]{background:var(--chip);border-color:var(--acc);color:var(--acc)}
+.btn input{position:absolute;width:1px;height:1px;opacity:0}
+.status{display:flex;flex-wrap:wrap;gap:8px;padding:10px max(2vw,16px) 0;font-size:13px}
+.chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px;display:inline-flex;gap:6px;align-items:center}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--mute);display:inline-block}
+.chip.good i{background:var(--good)}.chip.warn i{background:var(--warn)}.chip.bad i{background:var(--bad)}
+main{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:20px;padding:14px max(2vw,16px) 40px;align-items:start}
+.pages{display:grid;gap:20px;justify-items:center}
+.page{position:relative;width:min(100%,820px);aspect-ratio:612/792;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12),0 8px 24px rgba(0,0,0,.08);border-radius:2px;color-scheme:light}
+.page svg{position:absolute;inset:0;width:100%;height:100%}
+.page text{font-family:Helvetica,Arial,sans-serif}
+.editing .page text.ed{cursor:text}.editing .page text.ed:hover{fill:#0b5d63}
+.hl{fill:rgba(11,93,99,.08);stroke:rgba(11,93,99,.5);stroke-dasharray:3 3}
+.fld{position:absolute;border:1px solid #9aa4ae;background:#f7fafc;border-radius:2px;font-family:Helvetica,Arial,sans-serif;color:#111;padding:0 .4em;margin:0}
+.fld:focus{outline:2px solid #0b5d63;outline-offset:1px;background:#fff}
+input.fld[type=checkbox]{padding:0;accent-color:#0b5d63}
+.sig{display:flex;align-items:center;justify-content:center;font-style:italic;color:#555;text-align:center;line-height:1.3;background:repeating-linear-gradient(0deg,#f7fafc,#f7fafc 6px,#f1f5f8 6px,#f1f5f8 7px)}
+.sig.signed{color:#0b5d63;font-style:normal;background:#f2f8f8;border-color:#0b5d63}
+aside{background:var(--panel);border:1px solid var(--line);border-radius:12px;position:sticky;top:76px;max-height:calc(100vh - 96px);display:flex;flex-direction:column;overflow:hidden}
+.tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:0;border-radius:0;background:none;min-height:46px;flex:1 0 auto;color:var(--mute);border-bottom:2px solid transparent}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--acc);font-weight:600}
+.pane{padding:16px;overflow:auto;font-size:14px}.pane[hidden]{display:none}
+.pane h3{font-size:14px;margin:0 0 6px}.pane p{margin:0 0 12px;color:var(--mute)}
+.part{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;width:100%;text-align:left;padding:8px 10px;border-radius:8px;min-height:44px;border:1px solid transparent;background:none;font-size:13px}
+.part:hover,.part[aria-current=true]{background:var(--chip);border-color:var(--line)}
+.part b{font:600 13px ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}.part small{color:var(--mute);grid-column:1/-1;font-size:12.5px}
+.part em{font-style:normal;color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap}
+pre{background:var(--chip);border-radius:8px;padding:10px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;max-height:340px;margin:10px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+label.f{display:block;font-size:13px;color:var(--mute);margin-bottom:4px}
+input.t,textarea{width:100%;font:16px Inter,system-ui,sans-serif;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
+textarea{min-height:180px;font-size:15px;line-height:1.5}
+.log{list-style:none;margin:0;padding:0}.log li{padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}.log li span{color:var(--mute);display:block;font-size:12.5px}
+.sigcard{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+.sigcard b{display:block}.ok{color:var(--good)}.no{color:var(--bad)}.mid{color:var(--warn)}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);width:min(560px,94vw);padding:20px}
+dialog::backdrop{background:rgba(10,14,18,.45)}
+.note{font-size:12.5px;color:var(--mute)}
+.drop{outline:3px dashed var(--acc);outline-offset:-12px}
+.pdfm{grid-template-columns:170px minmax(0,1fr) 340px}
+.thumbs{background:var(--panel);border:1px solid var(--line);border-radius:12px;position:sticky;top:76px;max-height:calc(100vh - 96px);overflow:auto;padding:10px}
+.thead{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px;font-size:13px}.thead button{min-height:32px;padding:0 8px;font-size:12.5px}
+.thumb{border:1px solid var(--line);border-radius:8px;padding:6px;margin-bottom:8px;font-size:12.5px}.thumb.sel{border-color:var(--acc);background:var(--chip)}
+.thumb canvas{width:100%;height:auto;display:block;background:#fff;margin:4px 0;border:1px solid var(--line)}
+.tsel{display:flex;gap:6px;align-items:center}.tsel small{color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tact{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}.tact button{min-height:32px;padding:0;justify-content:center;font-size:14px}
+.ppages{display:grid;justify-items:center;gap:18px}
+.ppage{position:relative;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12),0 8px 24px rgba(0,0,0,.08);max-width:100%}
+.ppage canvas{display:block;width:100%;height:100%}
+.ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.ppages:not([data-tool=none]) .ov{pointer-events:auto;cursor:crosshair;touch-action:none}
+.pnum{position:absolute;right:8px;bottom:-22px;font-size:12px;color:var(--mute)}
+.toolrow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}.toolrow button{justify-content:center}
+#sigPad{width:100%;height:auto;aspect-ratio:3/1;background:#fff;border:1px dashed var(--line);border-radius:8px;touch-action:none;cursor:crosshair;display:block}
+#sigPreview img{max-width:100%;max-height:80px;background:#fff;border-radius:6px;padding:4px;margin-top:8px}
+.ck{display:flex;gap:8px;align-items:center;min-height:40px}
+select.t{min-height:42px;width:100%;font:16px Inter,system-ui,sans-serif;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
+input[type=range]{accent-color:var(--acc)}
+.pdfm .tabs button{padding:0 10px;font-size:13.5px;flex:1 0 auto}
+.pane .t{margin-bottom:10px}
+[hidden]{display:none!important}
+.fl{position:absolute;inset:0;pointer-events:none}
+.pf{position:absolute;pointer-events:auto;box-sizing:border-box;border:1px solid rgba(11,93,99,.55);background:rgba(232,244,245,.92);color:#111;border-radius:2px;padding:0 4px;margin:0;font-family:Helvetica,Arial,sans-serif}
+.pf:focus{outline:2px solid #0b5d63;background:#fff}
+input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
+.busy{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:10px 18px;border-radius:999px;font-size:14px;z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+@media(max-width:900px){main,.pdfm{grid-template-columns:minmax(0,1fr)}aside,.thumbs{position:static;max-height:none}#pdfThumbs{display:flex;gap:8px;overflow-x:auto}.thumb{flex:0 0 130px}}
+@media(prefers-reduced-motion:no-preference){.page{transition:box-shadow .2s}}
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0b5d63">
+<meta name="description" content="Leaf Viewer: open, edit, fill and sign .leaf and .pdf files in your browser. Free and open source. Files never leave your device.">
+</head>
+<body>
+<header>
+  <div class="brand">Leaf <span>viewer</span></div>
+  <div class="doc-title" id="docTitle">Loading…</div>
+  <div class="tools">
+    <label class="btn" title="Open a .leaf or .pdf file">Open file<input type="file" id="fileIn" accept=".leaf,.lef,.zip,.pdf,application/pdf,application/zip"></label>
+    <button id="sampleBtn" class="only-pdf" hidden>Leaf sample</button>
+    <button id="editBtn" class="only-leaf" aria-pressed="false">Edit text</button>
+    <button id="saveBtn" class="only-leaf">Save .leaf</button>
+    <button id="pdfBtn" class="primary only-leaf">Export PDF</button>
+    <button id="savePdfBtn" class="primary only-pdf" hidden>Save PDF</button>
+  </div>
+</header>
+<div class="status" id="status" aria-live="polite"></div>
+<main id="leafMain">
+  <section class="pages" id="pages" aria-label="Document pages"></section>
+  <aside>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="inside">Inside the file</button>
+      <button role="tab" aria-selected="false" data-tab="sign">Sign</button>
+      <button role="tab" aria-selected="false" data-tab="history">History</button>
+    </div>
+    <div class="pane" id="tab-inside">
+      <p>A Leaf file is a ZIP package. These are its parts, live: they update as you edit, fill or sign. Click one to see what it holds.</p>
+      <div id="parts"></div>
+      <pre id="partView" hidden></pre>
+    </div>
+    <div class="pane" id="tab-sign" hidden>
+      <h3>Seal this version and sign</h3>
+      <p>Sealing freezes the current content, form answers and pages inside the file. Your signature covers that frozen version, so anyone can check later whether it was changed.</p>
+      <label class="f" for="signer">Your name</label>
+      <input class="t" id="signer" autocomplete="name" placeholder="e.g. Ana Ruiz">
+      <div class="row"><button class="primary" id="signBtn">Seal and sign</button></div>
+      <p class="note">Demo signatures use a key created in your browser. A real signer would use a verified certificate.</p>
+      <div id="sigs"></div>
+    </div>
+    <div class="pane" id="tab-history" hidden>
+      <p>Every change is appended to <code>history/changes.jsonl</code> inside the file.</p>
+      <ul class="log" id="log"></ul>
+    </div>
+  </aside>
+</main>
+<main id="pdfMain" class="pdfm" hidden>
+  <nav class="thumbs" aria-label="Page list"><div class="thead"><b id="pgCount"></b><button id="selAll">Select all</button></div><div id="pdfThumbs"></div></nav>
+  <section class="ppages" id="pdfPages" data-tool="none" aria-label="PDF pages"></section>
+  <aside>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="annot">Annotate</button>
+      <button role="tab" aria-selected="false" data-tab="pgs">Pages</button>
+      <button role="tab" aria-selected="false" data-tab="form">Form</button>
+      <button role="tab" aria-selected="false" data-tab="psign">Sign</button>
+      <button role="tab" aria-selected="false" data-tab="ptools">Protect</button>
+    </div>
+    <div class="pane" id="tab-annot">
+      <div class="toolrow">
+        <button data-tool="none" aria-pressed="true">Select</button>
+        <button data-tool="hl" aria-pressed="false">Highlight</button>
+        <button data-tool="ink" aria-pressed="false">Draw</button>
+        <button data-tool="text" aria-pressed="false">Add text</button>
+      </div>
+      <p id="toolHint" class="note"></p>
+      <label class="f" for="annText">Text to add</label>
+      <input class="t" id="annText" placeholder="e.g. Approved, see note">
+      <label class="f" for="annSize">Text size</label>
+      <select class="t" id="annSize"><option>9</option><option>10</option><option selected>12</option><option>14</option><option>18</option><option>24</option></select>
+      <div class="row"><button class="undoBtn">Undo last change</button></div>
+    </div>
+    <div class="pane" id="tab-pgs" hidden>
+      <p>Rotate, move or delete pages with the buttons under each page in the list. Tick pages to extract them.</p>
+      <div class="row"><label class="btn">Add PDF (merge)<input type="file" id="addPdf" accept=".pdf,application/pdf"></label></div>
+      <div class="row"><button id="extractBtn">Extract ticked pages</button><button id="splitBtn">Split in two</button></div>
+      <p class="note">Saving uses object streams to keep files small. Stronger image compression comes in phase 2.</p>
+    </div>
+    <div class="pane" id="tab-form" hidden>
+      <p>Fill the PDF's own form fields. Values are written into the file when you save.</p>
+      <div id="formList"></div>
+      <label class="ck"><input type="checkbox" id="flatten"> Flatten fields into the page when saving</label>
+      <h3 style="margin-top:18px">Create fields</h3>
+      <p>Add new fillable fields to any PDF. Choose a type and name, then drag a box on the page.</p>
+      <label class="f" for="nfType">Field type</label>
+      <select class="t" id="nfType"><option value="text">Text</option><option value="checkbox">Checkbox</option><option value="dropdown">Dropdown</option></select>
+      <label class="f" for="nfName">Field name</label>
+      <input class="t" id="nfName" placeholder="e.g. tenant_name">
+      <div id="nfOptWrap" hidden><label class="f" for="nfOptions">Options, separated by commas</label><input class="t" id="nfOptions" placeholder="Yes, No, Maybe"></div>
+      <div class="row"><button data-tool="field" aria-pressed="false">Draw a field</button><button class="undoBtn">Undo</button></div>
+      <p id="fieldHint" class="note"></p>
+    </div>
+    <div class="pane" id="tab-psign" hidden>
+      <h3>Draw your signature</h3>
+      <canvas id="sigPad" width="600" height="200" aria-label="Signature pad"></canvas>
+      <div class="row"><button id="sigClear">Clear</button><button class="primary" id="sigUseDraw">Use drawn signature</button></div>
+      <h3>Or type it</h3>
+      <input class="t" id="sigName" autocomplete="name" placeholder="Your full name">
+      <div class="row"><button class="primary" id="sigUseType">Use typed signature</button></div>
+      <div id="sigPreview"></div>
+      <p class="note">After choosing, click on the page to place it. This is a visual e-signature; certificate-based signing comes in phase 3.</p>
+    </div>
+    <div class="pane" id="tab-ptools" hidden>
+      <h3>Redact</h3>
+      <p>Drag boxes over anything that must go. On save, those pages are rebuilt so the covered text and images are permanently removed, and document info such as author and title is cleared.</p>
+      <div class="row"><button data-tool="redact" aria-pressed="false">Mark for redaction</button><button class="undoBtn">Undo</button></div>
+      <p id="redactHint" class="note"></p>
+      <h3 style="margin-top:18px">Watermark</h3>
+      <label class="f" for="wmText">Watermark text</label>
+      <input class="t" id="wmText" placeholder="e.g. CONFIDENTIAL">
+      <label class="f" for="wmOpacity">Strength</label>
+      <input id="wmOpacity" type="range" min="0.05" max="0.5" step="0.05" value="0.15" style="width:100%">
+      <h3 style="margin-top:18px">Page numbers</h3>
+      <label class="ck"><input type="checkbox" id="pnOn"> Add page numbers</label>
+      <label class="f" for="pnFmt">Format ({n} = page, {total} = pages)</label>
+      <input class="t" id="pnFmt" value="Page {n} of {total}">
+      <label class="f" for="pnPos">Position</label>
+      <select class="t" id="pnPos"><option value="bc">Bottom center</option><option value="bl">Bottom left</option><option value="br">Bottom right</option></select>
+      <h3 style="margin-top:18px">Bates numbering</h3>
+      <label class="ck"><input type="checkbox" id="batesOn"> Add Bates numbers (bottom right)</label>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+        <div><label class="f" for="batesPrefix">Prefix</label><input class="t" id="batesPrefix" value="ABC"></div>
+        <div><label class="f" for="batesStart">Start</label><input class="t" id="batesStart" type="number" min="0" value="1"></div>
+        <div><label class="f" for="batesDigits">Digits</label><input class="t" id="batesDigits" type="number" min="1" max="12" value="6"></div>
+      </div>
+      <h3 style="margin-top:18px">Text recognition (OCR)</h3>
+      <p>Makes scanned pages searchable and copyable. Runs on the ticked pages, or all pages if none are ticked. The first run downloads the English language model from this page, about 15 MB.</p>
+      <div class="row"><button id="ocrBtn">Recognize text</button></div>
+      <p id="ocrResult" class="note"></p>
+      <h3 style="margin-top:18px">Password</h3>
+      <label class="f" for="pwSet">Require this password to open the saved PDF</label>
+      <input class="t" id="pwSet" type="password" autocomplete="new-password" placeholder="Leave empty for no password">
+      <p class="note">Encrypted with AES-256. Opening a protected PDF here asks for its password and removes it from your working copy.</p>
+    </div>
+  </aside>
+</main>
+<dialog id="editDlg">
+  <form method="dialog" id="editForm">
+    <h3 style="margin:0 0 4px" id="edTitle">Edit block</h3>
+    <p class="note" id="edHint" style="margin:0 0 10px"></p>
+    <textarea id="edText"></textarea>
+    <div class="row" style="justify-content:flex-end"><button value="cancel" type="button" id="edCancel">Cancel</button><button class="primary" value="ok" id="edOk">Apply</button></div>
+  </form>
+</dialog>
+<dialog id="pwDlg"><form method="dialog"><h3 id="pwTitle" style="margin:0 0 10px">Password required</h3><label class="f" for="pwIn">Password</label><input class="t" id="pwIn" type="password" autocomplete="current-password"><div class="row" style="justify-content:flex-end"><button type="button" id="pwCancel">Cancel</button><button class="primary" id="pwOk">Unlock</button></div></form></dialog>
+<div id="busy" class="busy" role="status" hidden></div>
+<dialog id="msgDlg"><p id="msgText" style="margin:0 0 14px"></p><div class="row" style="justify-content:flex-end;margin:0"><button class="primary" id="msgOk">OK</button></div></dialog>
+
+<script>/*CORE*/</script>
+<script src="jspdf.umd.min.js"></script>
+<script src="pdf.min.js"></script>
+<script src="pdf-lib.min.js"></script>
+<script src="qpdf.js"></script>
+<script src="tesseract.min.js"></script>
+<script>
+{
+const SAMPLE = '/*SAMPLE*/';
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const DESC = {
+  'mimetype': 'Identifies the file type from its first bytes.',
+  'manifest.json': 'Version, title and a SHA-256 hash of every part, so any change is detectable.',
+  'content/document.json': 'The real content: headings, paragraphs, tables, form fields. This is what you edit.',
+  'content/styles.json': 'Page size, margins and text styles: the layout rules.',
+  'layout/pages.json': 'The sealed page snapshot: every word positioned on every page, plus the hash of the content it came from.',
+  'data/values.json': 'Form answers, kept apart from the content.',
+  'history/changes.jsonl': 'Append-only log of every change.',
+  'comments/comments.json': 'Comment threads anchored to blocks.'
+};
+let st = null, manifest = null, files = null, partSel = 'content/document.json', downloads = null, sigState = [];
+let jsp = window.jspdf ? new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' }) : null;
+const cv = document.createElement('canvas').getContext('2d');
+const metrics = (t, b, s) => { if (jsp) { jsp.setFont('helvetica', b ? 'bold' : 'normal'); return jsp.getStringUnitWidth(t) * s; } cv.font = (b ? 'bold ' : '') + s + 'px Helvetica, Arial, sans-serif'; return cv.measureText(t).width; };
+const author = () => ($('#signer').value.trim() || 'You');
+const now = () => new Date().toISOString();
+const fmt = iso => { try { return new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }); } catch { return iso; } };
+function chip(cls, text) { return '<span class="chip ' + cls + '"><i></i>' + esc(text) + '</span>'; }
+function say(t) { $('#msgText').textContent = t; $('#msgDlg').showModal(); }
+$('#msgOk').onclick = () => $('#msgDlg').close();
+
+let statusLines = [];
+function setStatus(lines) { statusLines = lines; $('#status').innerHTML = lines.map(l => chip(l[0], l[1])).join(''); }
+
+async function relayout() {
+  st.snapshot = Leaf.layout(st.doc, st.styles, metrics);
+  st.snapshot.contentHash = await Leaf.contentHash(st.doc, st.styles);
+  st.snapshot.engine = 'leaf-reference-layout 0.1 (Helvetica metrics)';
+}
+
+async function load(u8, label) {
+  const r = await Leaf.unpack(u8);
+  st = r.st; manifest = r.manifest; files = r.files;
+  const lines = [];
+  if (r.tampered.length) lines.push(['bad', 'Parts changed outside a Leaf editor: ' + r.tampered.join(', ')]);
+  const h = await Leaf.contentHash(st.doc, st.styles);
+  if (st.snapshot && st.snapshot.contentHash === h) lines.push(['good', 'Pages drawn from the sealed snapshot (hash matches)']);
+  else { await relayout(); lines.push(['warn', 'Content differs from the snapshot, so pages were re-laid out']); }
+  lines.push(['', label]);
+  setStatus(lines);
+  $('#docTitle').textContent = st.doc.title;
+  await refresh();
+}
+
+async function refresh(changed) {
+  renderPages();
+  const p = await Leaf.pack(st); manifest = p.manifest; files = p.files;
+  renderParts(); renderLog(); await renderSigs();
+}
+
+/* ---------- pages ---------- */
+function renderPages() {
+  const W = st.styles.page.width, H = st.styles.page.height;
+  const sigText = name => st.values[name];
+  $('#pages').innerHTML = st.snapshot.pages.map((pg, pi) => {
+    let svg = '', ov = '';
+    for (const it of pg.items) {
+      if (it.k === 't') svg += '<text x="' + it.x + '" y="' + it.y + '" font-size="' + it.s + '"' + (it.b ? ' font-weight="700"' : '') + ' fill="' + (it.c || '#16191d') + '"' + (it.id ? ' class="ed" data-id="' + esc(it.id) + '"' : '') + '>' + esc(it.txt) + '</text>';
+      else if (it.k === 'r') svg += '<rect x="' + it.x + '" y="' + it.y + '" width="' + it.w + '" height="' + it.h + '" fill="' + it.fill + '"/>';
+      else if (it.k === 'l') svg += '<line x1="' + it.x1 + '" y1="' + it.y1 + '" x2="' + it.x2 + '" y2="' + it.y2 + '" stroke="#cfd5db" stroke-width="0.75"/>';
+      else if (it.k === 'dot') svg += '<circle cx="' + it.x + '" cy="' + it.y + '" r="1.8" fill="#16191d"/>';
+      else if (it.k === 'f') {
+        const pos = 'left:' + (it.x / W * 100) + '%;top:' + (it.y / H * 100) + '%;width:' + (it.w / W * 100) + '%;height:' + (it.h / H * 100) + '%;';
+        const v = st.values[it.name];
+        if (it.ft === 'checkbox') ov += '<input class="fld" type="checkbox" data-name="' + esc(it.name) + '" aria-label="' + esc(it.label) + '" style="' + pos + '"' + (v ? ' checked' : '') + '>';
+        else if (it.ft === 'signature') ov += '<div class="fld sig' + (v ? ' signed' : '') + '" style="' + pos + '" data-k="sig">' + (v ? esc(v) : 'Signed in the Sign tab') + '</div>';
+        else ov += '<input class="fld" type="' + (it.ft === 'date' ? 'date' : 'text') + '" data-name="' + esc(it.name) + '" aria-label="' + esc(it.label) + '" style="' + pos + '" value="' + esc(v || '') + '">';
+      }
+    }
+    return '<div class="page" data-p="' + pi + '"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Page ' + (pi + 1) + '">' + svg + '</svg>' + ov + '</div>';
+  }).join('');
+  sizeFields();
+}
+const ro = new ResizeObserver(sizeFields);
+function sizeFields() {
+  document.querySelectorAll('.page').forEach(p => {
+    const k = p.clientWidth / st.styles.page.width;
+    p.querySelectorAll('.fld').forEach(f => { f.style.fontSize = (10 * k) + 'px'; });
+    ro.observe(p);
+  });
+}
+$('#pages').addEventListener('input', e => {
+  const f = e.target.closest('input.fld'); if (!f) return;
+  st.values[f.dataset.name] = f.type === 'checkbox' ? f.checked : f.value;
+});
+$('#pages').addEventListener('change', async e => {
+  const f = e.target.closest('input.fld'); if (!f) return;
+  st.history.push({ time: now(), author: author(), op: 'fill', field: f.dataset.name });
+  st.modified = now();
+  const p = await Leaf.pack(st); manifest = p.manifest; files = p.files;
+  renderParts(); renderLog(); await renderSigs();
+});
+
+/* ---------- editing ---------- */
+let editing = false, edBlock = null;
+$('#editBtn').onclick = () => { editing = !editing; $('#editBtn').setAttribute('aria-pressed', editing); $('#pages').classList.toggle('editing', editing); if (editing) setStatus([...statusLines.filter(l => !l[1].startsWith('Edit mode')), ['', 'Edit mode: click any text on the page']]); };
+$('#pages').addEventListener('click', e => {
+  if (!editing) return;
+  const t = e.target.closest('text.ed'); if (!t) return;
+  const bl = st.doc.blocks.find(b => b.id === t.dataset.id); if (!bl) return;
+  edBlock = bl;
+  let txt = '', hint = '';
+  if (bl.type === 'heading') { txt = bl.text; hint = 'Heading text.'; }
+  else if (bl.type === 'paragraph') { txt = Leaf.runsToText(bl.text); hint = 'Wrap words in **double asterisks** for bold.'; }
+  else if (bl.type === 'list') { txt = bl.items.join('\n'); hint = 'One list item per line. **Bold** works too.'; }
+  else if (bl.type === 'table') { txt = bl.rows.map(r => r.join(' | ')).join('\n'); hint = 'One row per line, cells separated by | . Keep the same number of cells per row.'; }
+  else if (bl.type === 'fields' || bl.type === 'signature') { say('Form fields are filled in directly on the page.'); return; }
+  $('#edTitle').textContent = 'Edit ' + bl.type + ' · block ' + bl.id;
+  $('#edHint').textContent = hint; $('#edText').value = txt;
+  $('#editDlg').showModal(); $('#edText').focus();
+});
+$('#edCancel').onclick = () => $('#editDlg').close();
+$('#editForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const bl = edBlock, v = $('#edText').value;
+  if (bl.type === 'heading') bl.text = v.replace(/\n+/g, ' ').trim() || bl.text;
+  else if (bl.type === 'paragraph') bl.text = Leaf.textToRuns(v.replace(/\n+/g, ' '));
+  else if (bl.type === 'list') bl.items = v.split('\n').map(s => s.trim()).filter(Boolean);
+  else if (bl.type === 'table') {
+    const rows = v.split('\n').filter(s => s.trim()).map(r => r.split('|').map(c => c.trim()));
+    if (!rows.length || rows.some(r => r.length !== bl.widths.length)) { say('Each row needs exactly ' + bl.widths.length + ' cells.'); return; }
+    bl.rows = rows;
+  }
+  $('#editDlg').close();
+  st.history.push({ time: now(), author: author(), op: 'replace', block: bl.id });
+  st.modified = now();
+  await relayout();
+  setStatus([['warn', 'Edited: pages re-laid out from the content, new snapshot written'], ...statusLines.filter(l => !l[0] && !l[1].startsWith('Edit mode'))]);
+  await refresh();
+});
+
+/* ---------- inside the file ---------- */
+function partBytes() {
+  const all = { mimetype: new TextEncoder().encode('application/vnd.leaf+zip'), 'manifest.json': new TextEncoder().encode(JSON.stringify(manifest, null, 2)) };
+  return Object.assign(all, files);
+}
+function size(n) { return n < 1024 ? n + ' B' : (n / 1024).toFixed(1) + ' KB'; }
+function renderParts() {
+  const all = partBytes();
+  $('#parts').innerHTML = Object.keys(all).map(k => {
+    const d = DESC[k] || (k.startsWith('versions/') ? 'Frozen copy of a sealed version.' : k.startsWith('signatures/') ? 'A signature over a sealed version.' : '');
+    const h = manifest.parts[k] ? manifest.parts[k].sha256.slice(0, 10) + '…' : '';
+    return '<button class="part" data-k="' + esc(k) + '"' + (k === partSel ? ' aria-current="true"' : '') + '><b>' + esc(k) + '</b><em>' + size(all[k].length) + '</em>' + (d ? '<small>' + esc(d) + (h ? ' · sha256 ' + h : '') + '</small>' : '') + '</button>';
+  }).join('');
+  showPart(partSel);
+}
+function showPart(k) {
+  const all = partBytes(); if (!all[k]) return;
+  partSel = k;
+  let t = new TextDecoder().decode(all[k]);
+  if (t.length > 6000) t = t.slice(0, 6000) + '\n… (' + size(all[k].length) + ' in total)';
+  $('#partView').hidden = false; $('#partView').textContent = t;
+  document.querySelectorAll('.part').forEach(b => b.setAttribute('aria-current', b.dataset.k === k));
+}
+$('#parts').addEventListener('click', e => { const b = e.target.closest('.part'); if (b) showPart(b.dataset.k); });
+
+/* ---------- history ---------- */
+function renderLog() {
+  const label = h => h.op === 'create' ? 'Created the document' : h.op === 'fill' ? 'Filled “' + h.field + '”' : h.op === 'replace' ? 'Edited block ' + h.block : h.op === 'seal' ? 'Sealed and signed version ' + h.version : h.op;
+  $('#log').innerHTML = st.history.slice().reverse().map(h => '<li>' + esc(label(h)) + '<span>' + esc(h.author) + ' · ' + esc(fmt(h.time)) + '</span></li>').join('');
+}
+
+/* ---------- signatures ---------- */
+async function renderSigs() {
+  if (!st.signatures.length) { $('#sigs').innerHTML = '<p class="note">No signatures yet.</p>'; return; }
+  const out = [];
+  for (const s of st.signatures) {
+    const r = await Leaf.verifySignature(st, s);
+    const state = !r.ok ? '<span class="no">Invalid: ' + esc(r.why) + '</span>' : r.unchanged ? '<span class="ok">Valid · document unchanged since signing</span>' : '<span class="mid">Valid for version ' + s.payload.version + ' · the document was changed after signing (the signed version is kept in the file)</span>';
+    out.push('<div class="sigcard"><b>' + esc(s.payload.signer) + '</b><span class="note">Version ' + s.payload.version + ' · ' + esc(fmt(s.payload.time)) + ' · ES256</span><div>' + state + '</div></div>');
+  }
+  $('#sigs').innerHTML = out.join('');
+}
+$('#signBtn').onclick = async () => {
+  const name = $('#signer').value.trim();
+  if (!name) { $('#signer').focus(); say('Type your name first, then seal and sign.'); return; }
+  const sigField = st.doc.blocks.find(b => b.type === 'signature');
+  if (sigField) st.values[sigField.name] = 'Signed by ' + name + '\n' + new Date().toLocaleDateString([], { dateStyle: 'medium' });
+  const n = await Leaf.signVersion(st, name);
+  st.history.push({ time: now(), author: name, op: 'seal', version: n });
+  st.modified = now();
+  setStatus([['good', 'Version ' + n + ' sealed and signed by ' + name], ...statusLines.filter(l => !l[0])]);
+  await refresh();
+};
+
+/* ---------- open, save, export ---------- */
+async function openFile(f) {
+  try {
+    const u = new Uint8Array(await f.arrayBuffer());
+    if (u[0] === 0x25 && u[1] === 0x50 && u[2] === 0x44 && u[3] === 0x46) { if (!(await window.PDFWS.open(u, f.name))) return; setStatus([['good', 'Editing ' + f.name + ' in your browser. Nothing was uploaded.']]); return; }
+    setMode('leaf'); await load(u, 'Opened ' + f.name + ' from your device. Nothing was uploaded.');
+  } catch (err) { say('Could not open that file: ' + err.message); }
+}
+function setMode(m, title) {
+  $('#leafMain').hidden = m !== 'leaf'; $('#pdfMain').hidden = m !== 'pdf';
+  document.querySelectorAll('.only-leaf').forEach(e => e.hidden = m !== 'leaf');
+  document.querySelectorAll('.only-pdf').forEach(e => e.hidden = m !== 'pdf');
+  if (m === 'leaf' && st) $('#docTitle').textContent = st.doc.title;
+  if (m === 'pdf') $('#docTitle').textContent = title || 'PDF';
+}
+$('#sampleBtn').onclick = () => { setMode('leaf'); load(Uint8Array.from(atob(SAMPLE), c => c.charCodeAt(0)), 'Sample file: lease-sample.leaf.'); };
+$('#fileIn').onchange = e => { const f = e.target.files[0]; if (f) openFile(f); e.target.value = ''; };
+document.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('drop'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('drop'); });
+document.addEventListener('drop', e => { e.preventDefault(); document.body.classList.remove('drop'); const f = e.dataTransfer.files[0]; if (f) openFile(f); });
+const slug = () => st.doc.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'document';
+async function offer(filename, data) {
+  if (!downloads) {
+    const url = URL.createObjectURL(new Blob([data], { type: /\.pdf$/i.test(filename) ? 'application/pdf' : 'application/vnd.leaf+zip' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); return;
+  }
+  try { await downloads.save({ filename, data }); }
+  catch (err) { if (err && err.code !== 'declined') say('The file was not saved (' + (err.code || 'error') + ').'); }
+}
+$('#saveBtn').onclick = async () => {
+  const p = await Leaf.pack(st);
+  await offer(slug() + (downloads ? '.leaf.zip' : '.leaf'), p.bytes);
+};
+$('#pdfBtn').onclick = async () => {
+  if (!window.jspdf) { say('The PDF engine did not load in this view.'); return; }
+  const pdf = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
+  pdf.setProperties({ title: st.doc.title, creator: 'Leaf reference viewer 0.1' });
+  const rgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  st.snapshot.pages.forEach((pg, i) => {
+    if (i) pdf.addPage();
+    for (const it of pg.items) {
+      if (it.k === 't') { pdf.setFont('helvetica', it.b ? 'bold' : 'normal'); pdf.setFontSize(it.s); pdf.setTextColor(...rgb(it.c || '#16191d')); pdf.text(it.txt, it.x, it.y); }
+      else if (it.k === 'r') { pdf.setFillColor(...rgb(it.fill)); pdf.rect(it.x, it.y, it.w, it.h, 'F'); }
+      else if (it.k === 'l') { pdf.setDrawColor(207, 213, 219); pdf.setLineWidth(0.75); pdf.line(it.x1, it.y1, it.x2, it.y2); }
+      else if (it.k === 'dot') { pdf.setFillColor(22, 25, 29); pdf.circle(it.x, it.y, 1.8, 'F'); }
+      else if (it.k === 'f') {
+        const v = st.values[it.name];
+        pdf.setDrawColor(154, 164, 174); pdf.setLineWidth(0.75); pdf.rect(it.x, it.y, it.w, it.h);
+        pdf.setTextColor(17, 17, 17); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10);
+        if (it.ft === 'checkbox') { if (v) { pdf.setDrawColor(11, 93, 99); pdf.setLineWidth(1.4); pdf.line(it.x + 3, it.y + 7, it.x + 6, it.y + 11); pdf.line(it.x + 6, it.y + 11, it.x + 11, it.y + 3); } }
+        else if (it.ft === 'signature') { if (v) { pdf.setTextColor(11, 93, 99); pdf.setFontSize(11); pdf.text(String(v).split('\n'), it.x + it.w / 2, it.y + it.h / 2 - 2, { align: 'center' }); } }
+        else if (v) pdf.text(String(v), it.x + 5, it.y + it.h / 2 + 3.5);
+      }
+    }
+  });
+  await offer(slug() + '.pdf', pdf.output('arraybuffer'));
+};
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('.tabs').forEach(t => t.addEventListener('click', e => {
+  const b = e.target.closest('[data-tab]'); if (!b) return; const scope = t.closest('aside');
+  t.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', x === b));
+  scope.querySelectorAll('.pane').forEach(p => { p.hidden = p.id !== 'tab-' + b.dataset.tab; });
+}));
+window.LeafApp = { say, offer, setMode };
+
+/* ---------- start ---------- */
+const u8 = Uint8Array.from(atob(SAMPLE), c => c.charCodeAt(0));
+if ('launchQueue' in window) launchQueue.setConsumer(async p => { if (p.files && p.files.length) openFile(await p.files[0].getFile()); });
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+load(u8, 'Sample file: lease-sample.leaf. Open your own .leaf file or drop it anywhere.').catch(err => say('Could not load the sample: ' + err.message));
+if (window.claude && claude.use) claude.use('downloads').then(d => { downloads = d; }).catch(() => {});
+}
+</script>
+<script src="pdf-tools.js"></script>
+</body>
+</html>

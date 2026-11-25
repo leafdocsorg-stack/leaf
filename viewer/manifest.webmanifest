@@ -1,0 +1,19 @@
+{
+  "name": "Leaf Viewer",
+  "short_name": "Leaf",
+  "description": "Open, edit, fill and sign .leaf and .pdf files. Free and open source.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0b5d63",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "file_handlers": [
+    { "action": "./", "accept": { "application/vnd.leaf+zip": [".leaf", ".lef"] } },
+    { "action": "./", "accept": { "application/pdf": [".pdf"] } }
+  ]
+}
