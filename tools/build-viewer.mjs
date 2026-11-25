@@ -25,20 +25,31 @@ html = html.replace('/*CORE*/', () => core).replace("'/*SAMPLE*/'", () => `'${sa
 const ptHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, 'viewer/pdf-tools.js'))).digest('hex').slice(0, 10);
 html = html.replace('<script src="pdf-tools.js"></script>', `<script src="pdf-tools.js?v=${ptHash}"></script>`);
 fs.writeFileSync(path.join(app, 'index.html'), html);
-// Self-contained reader at /app/reader.html. "Save as web page" fills it with a document so the .leaf.html file opens in any browser.
-{
+// Self-contained readers. "Save" fills one with a document so the .leaf.html file opens in any browser.
+//   reader.html      Leaf documents (small)
+//   reader-pdf.html  documents that keep their original page design (adds the PDF page renderer)
+const V = f => fs.readFileSync(path.join(root, 'viewer/vendor', f), 'utf8');
+function makeReader(withPdf) {
   let rd = fs.readFileSync(path.join(root, 'viewer/viewer.template.html'), 'utf8');
+  const hide = withPdf ? '#pdfBtn,#newDocBtn,#homeBtn,.install,header label.btn:has(#fileIn)' : '#pdfBtn,#leafBtn,#newDocBtn,#homeBtn,.install,header label.btn:has(#fileIn)';
+  const tail = withPdf
+    ? '});\n</script>\n<script>\naddEventListener(\'DOMContentLoaded\', () => {\n' + fs.readFileSync(path.join(root, 'viewer/pdf-tools.js'), 'utf8') + '\n});\n</script>'
+    : '});\n</script>';
   rd = rd.replace('/*CORE*/', () => core).replace("'/*SAMPLE*/'", "''")
     .replace(/<link rel="manifest"[^>]*>\n?/, '')
-    .replace('}\n</script>\n<script src="pdf-tools.js"></script>', '});\n</script>')
-    .replace(/<script src="(jspdf|pdf|pdf-lib|qpdf|tesseract)[^"]*"><\/script>\n/g, '')
+    .replace('}\n</script>\n<script src="pdf-tools.js"></script>', () => tail)
+    .replace(/<script src="(jspdf\.umd|qpdf|tesseract)[^"]*"><\/script>\n/g, '')
+    .replace(/<script src="pdf\.min\.js"><\/script>\n/, () => withPdf ? '<script>' + V('pdf.min.js') + '\n</script>\n<script type="text/plain" id="pdfworker">' + V('pdf.worker.min.js') + '\n</script>\n<script>pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([document.getElementById("pdfworker").textContent], { type: "text/javascript" }));</script>\n' : '')
+    .replace(/<script src="pdf-lib\.min\.js"><\/script>\n/, () => withPdf ? '<script>' + V('pdf-lib.min.js') + '\n</script>\n' : '')
     .replace('<script>\n{\nconst SAMPLE', "<script>\naddEventListener('DOMContentLoaded', () => {\nconst SAMPLE")
-    .replace('</head>', '<script>document.addEventListener("readystatechange", function () { if (document.readyState === "interactive") window.__LEAF_READER_SRC = "<!doctype html>\\n" + document.documentElement.outerHTML; });</script>\n<style>#pdfBtn,#leafBtn,#newDocBtn,#homeBtn,.install,header label.btn:has(#fileIn){display:none!important}</style>\n</head>')
+    .replace('</head>', () => '<script>document.addEventListener("readystatechange", function () { if (document.readyState === "interactive") window.__LEAF_READER_SRC = "<!doctype html>\\n" + document.documentElement.outerHTML; });</script>\n<style>' + hide + '{display:none!important}</style>\n</head>')
     .replace('<body>', '<body>\n<script type="text/plain" id="leafdata"></script>')
     .replace(/href="\/(?!\/)/g, 'href="https://leafdocs.org/');
-  if (rd.includes('pdf-tools.js') || !rd.includes('});\n</script>') || !rd.includes('id="leafdata"') || !rd.includes('DOMContentLoaded')) throw new Error('reader build failed');
-  fs.writeFileSync(path.join(app, 'reader.html'), rd);
+  if (/<script src=/.test(rd) || !rd.includes('id="leafdata"') || !rd.includes('DOMContentLoaded') || (withPdf && !rd.includes('id="pdfworker"'))) throw new Error('reader build failed');
+  return rd;
 }
+fs.writeFileSync(path.join(app, 'reader.html'), makeReader(false));
+fs.writeFileSync(path.join(app, 'reader-pdf.html'), makeReader(true));
 for (const f of ['pdf-tools.js', 'manifest.webmanifest', 'sw.js', 'icon.svg', 'icon-192.png', 'icon-512.png']) fs.copyFileSync(path.join(root, 'viewer', f), path.join(app, f));
 for (const f of fs.readdirSync(path.join(root, 'viewer/vendor'))) fs.copyFileSync(path.join(root, 'viewer/vendor', f), path.join(app, f));
 
