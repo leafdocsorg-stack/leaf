@@ -33,7 +33,7 @@ fs.writeFileSync(path.join(app, 'index.html'), html);
     .replace('}\n</script>\n<script src="pdf-tools.js"></script>', '});\n</script>')
     .replace(/<script src="(jspdf|pdf|pdf-lib|qpdf|tesseract)[^"]*"><\/script>\n/g, '')
     .replace('<script>\n{\nconst SAMPLE', "<script>\naddEventListener('DOMContentLoaded', () => {\nconst SAMPLE")
-    .replace('</head>', '<script>document.addEventListener("readystatechange", function () { if (document.readyState === "interactive") window.__LEAF_READER_SRC = "<!doctype html>\\n" + document.documentElement.outerHTML; });</script>\n<style>#pdfBtn,#leafBtn,#newDocBtn,.install{display:none!important}</style>\n</head>')
+    .replace('</head>', '<script>document.addEventListener("readystatechange", function () { if (document.readyState === "interactive") window.__LEAF_READER_SRC = "<!doctype html>\\n" + document.documentElement.outerHTML; });</script>\n<style>#pdfBtn,#leafBtn,#newDocBtn,#homeBtn,.install,header label.btn:has(#fileIn){display:none!important}</style>\n</head>')
     .replace('<body>', '<body>\n<script type="text/plain" id="leafdata"></script>')
     .replace(/href="\/(?!\/)/g, 'href="https://leafdocs.org/');
   if (rd.includes('pdf-tools.js') || !rd.includes('});\n</script>') || !rd.includes('id="leafdata"') || !rd.includes('DOMContentLoaded')) throw new Error('reader build failed');
