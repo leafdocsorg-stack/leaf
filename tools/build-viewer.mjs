@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 // Builds the website into dist/: node tools/build-viewer.mjs
 //   dist/            landing page (site/)
 //   dist/spec/       the specification, rendered from spec/leaf-spec-0.1.md
@@ -20,6 +21,9 @@ const core = fs.readFileSync(path.join(root, 'core/leaf-core.js'), 'utf8');
 const sample = fs.readFileSync(path.join(root, 'samples/lease-sample.leaf')).toString('base64');
 let html = fs.readFileSync(path.join(root, 'viewer/viewer.template.html'), 'utf8');
 html = html.replace('/*CORE*/', () => core).replace("'/*SAMPLE*/'", () => `'${sample}'`);
+// Version the app script by its content so every deploy reaches returning visitors.
+const ptHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, 'viewer/pdf-tools.js'))).digest('hex').slice(0, 10);
+html = html.replace('<script src="pdf-tools.js"></script>', `<script src="pdf-tools.js?v=${ptHash}"></script>`);
 fs.writeFileSync(path.join(app, 'index.html'), html);
 for (const f of ['pdf-tools.js', 'manifest.webmanifest', 'sw.js', 'icon.svg', 'icon-192.png', 'icon-512.png']) fs.copyFileSync(path.join(root, 'viewer', f), path.join(app, f));
 for (const f of fs.readdirSync(path.join(root, 'viewer/vendor'))) fs.copyFileSync(path.join(root, 'viewer/vendor', f), path.join(app, f));
@@ -47,5 +51,5 @@ fs.copyFileSync(path.join(root, 'samples/lease-sample.leaf'), path.join(mk('samp
 // Crawler files and headers
 fs.writeFileSync(path.join(out, 'robots.txt'), 'User-agent: *\nAllow: /\nSitemap: https://leafdocs.org/sitemap.xml\n');
 fs.writeFileSync(path.join(out, 'sitemap.xml'), '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>https://leafdocs.org/</loc></url>\n<url><loc>https://leafdocs.org/developers/</loc></url>\n<url><loc>https://leafdocs.org/spec/</loc></url>\n<url><loc>https://leafdocs.org/app/</loc></url>\n</urlset>\n');
-fs.writeFileSync(path.join(out, '_headers'), '/samples/*\n  Content-Type: application/vnd.leaf+zip\n  Content-Disposition: attachment\n');
+fs.writeFileSync(path.join(out, '_headers'), '/samples/*\n  Content-Type: application/vnd.leaf+zip\n  Content-Disposition: attachment\n/app/*\n  Cache-Control: no-cache\n');
 console.log('Built dist/. Serve it with any static host, e.g. npx serve dist');
