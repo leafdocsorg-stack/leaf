@@ -17,7 +17,7 @@
 *{box-sizing:border-box;min-width:0}
 body{margin:0;background:var(--desk);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
 header{background:var(--panel);border-bottom:1px solid var(--line);padding:12px max(2vw,16px);display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;position:sticky;top:0;z-index:5}
-.brand{font-weight:700;font-size:15px;letter-spacing:-.01em;color:var(--ink);text-decoration:none}.brand:hover{color:var(--acc)}.homelink{font-size:13.5px;color:var(--mute);text-decoration:none}.homelink:hover{color:var(--acc);text-decoration:underline}.start .links{margin:26px 0 0;font-size:13.5px;color:var(--mute)}.start .links a{color:var(--mute)}.brand span{color:var(--mute);font-weight:500}
+.brand{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:15px;letter-spacing:-.01em;color:var(--ink);text-decoration:none}.brand:hover{color:var(--acc)}.homelink{font-size:13.5px;color:var(--mute);text-decoration:none}.homelink:hover{color:var(--acc);text-decoration:underline}.start .links{margin:26px 0 0;font-size:13.5px;color:var(--mute)}.start .links a{color:var(--mute)}.brand span{color:var(--mute);font-weight:500}
 .doc-title{font-weight:600;font-size:15px;flex:1 1 220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tools{display:flex;flex-wrap:wrap;gap:8px}
 button,.btn{font:500 14px Inter,system-ui,sans-serif;min-height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
@@ -113,7 +113,7 @@ input.pf[type=checkbox],input.pf[type=radio]{padding:0;accent-color:#0b5d63}
 </head>
 <body>
 <header>
-  <a class="brand" href="/" title="Back to the Leaf website">Leaf</a>
+  <a class="brand" href="/" title="Back to the Leaf website"><svg aria-hidden="true" width="16" height="18" viewBox="2 2 52 60"><path d="M4 4H34L52 22V60H4Z" fill="#0b5d63"/><path d="M34 4C34 16 40 22 52 22C46 10 40 6 34 4Z" fill="#1aa37a"/></svg>Leaf</a>
   <a class="homelink" href="/">&larr; Website</a>
   <button id="homeBtn" hidden title="Close this file and go back to the start screen">Close file</button>
   <div class="doc-title" id="docTitle">Loading…</div>
