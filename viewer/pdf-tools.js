@@ -30,7 +30,7 @@ async function open(bytes, name) {
   if (!window.pdfjsLib || !window.PDFLib) { say('The PDF engine did not load in this view.'); return false; }
   bytes = await unlockIfNeeded(bytes, name); if (!bytes) return false;
   srcs = []; pages = []; annots = {}; undo = []; values = {}; fields = []; widgets = {}; fileName = name || 'document.pdf';
-  Object.assign(stamps, { wm: '', wmOpacity: 0.15, pn: false, pnFmt: 'Page {n} of {total}', pnPos: 'bc', bates: false, batesPrefix: 'ABC', batesStart: 1, batesDigits: 6 }); $('#pwSet').value = ''; $('#ocrResult').textContent = '';
+  Object.assign(stamps, { wm: '', wmOpacity: 0.15, pn: false, pnFmt: 'Page {n} of {total}', pnPos: 'bc', bates: false, batesPrefix: 'ABC', batesStart: 1, batesDigits: 6 }); $('#pwSet').value = ''; ['#infoTitle', '#infoAuthor', '#infoSubject'].forEach(i => $(i).value = ''); $('#ocrResult').textContent = '';
   await addSource(bytes, name);
   await readFields();
   window.LeafApp.setMode('pdf', fileName);
@@ -152,6 +152,9 @@ function drawOverlay(uid) {
     if (a.t === 'img') { const r = R(a); return '<image href="' + a.png + '" x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" preserveAspectRatio="none"/>'; }
     if (a.t === 'redact') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="#000" fill-opacity=".55" stroke="#d11" stroke-width="1.5"/>'; }
     if (a.t === 'newfield') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="#0b5d63" fill-opacity=".08" stroke="#0b5d63" stroke-dasharray="4 3"/><text x="' + (r.x + 4) + '" y="' + (r.y - 4) + '" font-size="11" fill="#0b5d63" font-family="Inter,sans-serif">' + esc(a.ft + ': ' + a.name) + '</text>'; }
+    if (a.t === 'edit') { const r = R(editBox(a)), [bx, by] = V(a.x, a.by); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="' + a.bg + '"/><text x="' + bx + '" y="' + by + '" font-size="' + (a.size * vp.scale) + '" font-family=\'' + cssFam(a) + '\' font-weight="' + (a.bold ? 700 : 400) + '" font-style="' + (a.italic ? 'italic' : 'normal') + '" fill="' + a.fg + '" xml:space="preserve">' + esc(a.txt) + '</text>'; }
+    if (a.t === 'ul' || a.t === 'st') { const r = R(a), yy = a.t === 'ul' ? r.y + r.h : r.y + r.h / 2; return '<line x1="' + r.x + '" x2="' + (r.x + r.w) + '" y1="' + yy + '" y2="' + yy + '" stroke="#d11" stroke-width="1.5"/>'; }
+    if (a.t === 'rect') { const r = R(a); return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" fill="none" stroke="#0b5d63" stroke-width="1.6"/>'; }
     if (a.t === 'ink') return '<polyline fill="none" stroke="#0b5d63" stroke-width="' + (1.6 * vp.scale) + '" stroke-linecap="round" stroke-linejoin="round" points="' + a.pts.map(pt => V(pt[0], pt[1]).join(',')).join(' ') + '"/>';
     if (a.t === 'text') { const [x, y] = V(a.x, a.y); return '<text x="' + x + '" y="' + y + '" font-size="' + (a.s * vp.scale) + '" font-family="Helvetica,Arial,sans-serif" fill="#111">' + esc(a.txt) + '</text>'; }
     return '';
@@ -187,9 +190,110 @@ function setTool(t) {
   tool = t;
   document.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t));
   $('#pdfPages').dataset.tool = t;
-  const hints = { none: 'Pick a tool, then work on the page. Form fields can be typed into directly.', hl: 'Drag across text to highlight it.', ink: 'Draw freely on the page.', text: 'Type your text below, then click where it goes.', sign: sigPng ? 'Click where your signature goes.' : 'Create your signature in the Sign tab first.', redact: 'Drag over anything to remove. It is permanently removed when you save.', field: 'Drag a box where the new field goes.' };
-  $('#toolHint').textContent = hints[t] || ''; $('#redactHint').textContent = t === 'redact' ? hints.redact : ''; $('#fieldHint').textContent = t === 'field' ? hints.field : '';
+  const hints = { none: 'Pick a tool, then work on the page. Form fields can be typed into directly.', edit: 'Click any line of text on the page, then type to change it. Enter to apply, Esc to cancel.', ul: 'Drag across text to underline it.', st: 'Drag across text to strike it through.', rect: 'Drag to draw a box.', image: insPng ? 'Click where the image goes.' : 'Choose an image first.', hl: 'Drag across text to highlight it.', ink: 'Draw freely on the page.', text: 'Type your text below, then click where it goes.', sign: sigPng ? 'Click where your signature goes.' : 'Create your signature in the Sign tab first.', redact: 'Drag over anything to remove. It is permanently removed when you save.', field: 'Drag a box where the new field goes.' };
+  $('#toolHint').textContent = hints[t] || ''; if ($('#editHint')) $('#editHint').textContent = t === 'edit' ? hints.edit : ''; $('#redactHint').textContent = t === 'redact' ? hints.redact : ''; $('#fieldHint').textContent = t === 'field' ? hints.field : '';
 }
+
+/* ---------- edit existing text ---------- */
+const runCache = {};
+{ const st = document.createElement('style');
+  st.textContent = '.pedit{position:absolute;z-index:5;box-sizing:border-box;border:1px solid #14808a;outline:2px solid rgba(20,128,138,.25);padding:0 1px;margin:0;line-height:1;border-radius:1px}#pdfPages[data-tool=edit] .ov{cursor:text}';
+  document.head.appendChild(st); }
+async function runsFor(uid) {
+  if (runCache[uid]) return runCache[uid];
+  const p = pages.find(q => q.uid === uid), page = await pdfPage(p), tc = await page.getTextContent();
+  const runs = []; let cur = null;
+  const fontInfo = fn => {
+    let name = ''; try { name = page.commonObjs.get(fn).name || ''; } catch (e) {}
+    const fam = (tc.styles[fn] || {}).fontFamily || '';
+    const n = name + ' ' + fam;
+    return { bold: /bold|black|heavy|semibold|demi/i.test(n), italic: /italic|oblique/i.test(n),
+      fam: /courier|mono|consolas|menlo/i.test(n) ? 'mono' : /times|georgia|serif|garamond|palatino|minion|cambria|book/i.test(n) && !/sans/i.test(n) ? 'serif' : 'sans' };
+  };
+  for (const it of tc.items) {
+    if (!it.str && !it.width) continue;
+    const [a, b, , d, e, f] = it.transform, size = Math.hypot(a, b) || Math.abs(d) || 10;
+    if (Math.abs(b) > 0.05 * size) continue;
+    const fi = fontInfo(it.fontName);
+    if (cur && Math.abs(f - cur.y) < 0.3 * size) {
+      const gap = e - (cur.x + cur.w);
+      if (gap > -size * 0.5 && gap < size * 0.6) {
+        if (gap > size * 0.25 && !/\s$/.test(cur.str) && !/^\s/.test(it.str)) cur.str += ' ';
+        cur.str += it.str; cur.w = Math.max(cur.w, e + it.width - cur.x); continue;
+      }
+    }
+    cur = { x: e, y: f, w: it.width, size, str: it.str, ...fi }; runs.push(cur);
+  }
+  return (runCache[uid] = runs.filter(r => r.str.trim() && r.w > 1));
+}
+const bbox = r => ({ x: r.x - 1, y: r.y - 0.24 * r.size, w: r.w + 2, h: 1.22 * r.size });
+const inBox = (b, pt) => pt.x >= b.x && pt.x <= b.x + b.w && pt.y >= b.y && pt.y <= b.y + b.h;
+const editBox = a => bbox({ x: a.x, y: a.by, w: a.w, size: a.size });
+const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+const covered = (uid, r) => (annots[uid] || []).some(a => a.t === 'edit' && overlaps(bbox(r), editBox(a)));
+function sampleColors(uid, r) {
+  const vp = vps[uid], el = document.querySelector('.ppage[data-uid="' + uid + '"] canvas'); if (!el || !vp) return { bg: '#ffffff', fg: '#111111' };
+  const k = el.width / vp.width, ctx = el.getContext('2d'), bb = bbox(r);
+  const [x1, y1, x2, y2] = vp.convertToViewportRectangle([bb.x, bb.y, bb.x + bb.w, bb.y + bb.h]);
+  const L = Math.max(0, Math.floor(Math.min(x1, x2) * k)), T = Math.max(0, Math.floor(Math.min(y1, y2) * k));
+  const W = Math.max(1, Math.min(el.width - L, Math.ceil(Math.abs(x2 - x1) * k))), H = Math.max(1, Math.min(el.height - T, Math.ceil(Math.abs(y2 - y1) * k)));
+  let data; try { data = ctx.getImageData(L, T, W, H).data; } catch (e) { return { bg: '#ffffff', fg: '#111111' }; }
+  const cnt = {}; let best = '', bn = 0;
+  for (let i = 0; i < data.length; i += 4) { const q = (data[i] >> 4) + ',' + (data[i + 1] >> 4) + ',' + (data[i + 2] >> 4); const n = cnt[q] = (cnt[q] || 0) + 1; if (n > bn) { bn = n; best = q; } }
+  const bgc = best.split(',').map(v => v * 16 + 8); let far = 0, fgc = [17, 17, 17];
+  for (let i = 0; i < data.length; i += 4) { const dd = Math.abs(data[i] - bgc[0]) + Math.abs(data[i + 1] - bgc[1]) + Math.abs(data[i + 2] - bgc[2]); if (dd > far) { far = dd; fgc = [data[i], data[i + 1], data[i + 2]]; } }
+  const hex = c => '#' + c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+  return { bg: hex(bgc.map(v => v > 232 ? 255 : v)), fg: far > 90 ? hex(fgc) : '#111111' };
+}
+let editor = null;
+const cssFam = a => a.fam === 'mono' ? '"Courier New",Courier,monospace' : a.fam === 'serif' ? '"Times New Roman",Times,serif' : 'Helvetica,Arial,sans-serif';
+function closeEditor(commit) {
+  if (!editor) return; const e = editor; editor = null; const val = e.input.value;
+  e.input.onblur = null; e.input.remove();
+  if (!commit) return;
+  if (e.ann) { if (val !== e.ann.txt) { snap(); e.ann.txt = val; drawOverlay(e.uid); } }
+  else if (val !== e.run.str) addAnn(e.uid, { t: 'edit', x: e.run.x, by: e.run.y, w: e.run.w, size: e.run.size, orig: e.run.str, txt: val, bg: e.cols.bg, fg: e.cols.fg, fam: e.run.fam, bold: e.run.bold, italic: e.run.italic });
+}
+async function startEdit(pt) {
+  closeEditor(true);
+  const uid = pt.uid, vp = vps[uid];
+  let ann = (annots[uid] || []).find(a => a.t === 'edit' && inBox(editBox(a), pt)), run = null, cols = null;
+  if (!ann) {
+    const runs = await runsFor(uid);
+    if (!runs.length) { say('This page has no editable text. If it is a scan, use Convert → Make text searchable first.'); return; }
+    run = runs.find(r => inBox(bbox(r), pt) && !covered(uid, r));
+    if (!run) { $('#editHint').textContent = 'No text there. Click directly on a line of text.'; return; }
+    cols = sampleColors(uid, run);
+  }
+  const src = ann ? { x: ann.x, y: ann.by, w: ann.w, size: ann.size, fam: ann.fam, bold: ann.bold, italic: ann.italic } : run;
+  const bb = bbox(src), [x1, y1, x2, y2] = vp.convertToViewportRectangle([bb.x, bb.y, bb.x + bb.w, bb.y + bb.h]);
+  const host = document.querySelector('.ppage[data-uid="' + uid + '"]'), hr = host.getBoundingClientRect(), k = hr.width / vp.width;
+  const input = document.createElement('input'); input.className = 'pedit'; input.type = 'text'; input.spellcheck = false;
+  input.value = ann ? ann.txt : run.str;
+  const c = ann || { ...cols, ...run }, fs = src.size * vp.scale * k;
+  Object.assign(input.style, { left: Math.min(x1, x2) * k - 1 + 'px', top: Math.min(y1, y2) * k + 'px', height: Math.abs(y2 - y1) * k + 'px', width: Math.abs(x2 - x1) * k + 14 + 'px',
+    fontSize: fs + 'px', fontFamily: cssFam(src), fontWeight: src.bold ? '700' : '400', fontStyle: src.italic ? 'italic' : 'normal', color: c.fg, background: c.bg });
+  host.appendChild(input);
+  const meas = document.createElement('canvas').getContext('2d');
+  const fit = () => { meas.font = (src.italic ? 'italic ' : '') + (src.bold ? 'bold ' : '') + fs + 'px ' + cssFam(src); input.style.width = Math.max(Math.abs(x2 - x1) * k + 14, meas.measureText(input.value).width + 14) + 'px'; };
+  input.oninput = fit; fit();
+  input.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); closeEditor(true); } else if (ev.key === 'Escape') { ev.preventDefault(); closeEditor(false); } ev.stopPropagation(); };
+  input.onblur = () => closeEditor(true);
+  editor = { input, uid, ann, run, cols }; input.focus(); input.select();
+}
+$('#pdfPages').addEventListener('pointermove', async e => {
+  if (tool !== 'edit' || draft || e.target.closest('.pedit')) return;
+  const pt = pdfPoint(e), svg = e.target.closest('svg.ov'); if (!pt || !svg) return;
+  let h = svg.querySelector('.hov'); const vp = vps[pt.uid];
+  const a = (annots[pt.uid] || []).find(a => a.t === 'edit' && inBox(editBox(a), pt));
+  let box = a ? editBox(a) : null;
+  if (!box) { const r = (await runsFor(pt.uid)).find(r => inBox(bbox(r), pt) && !covered(pt.uid, r)); box = r && bbox(r); }
+  if (!box) { if (h) h.remove(); return; }
+  const [x1, y1, x2, y2] = vp.convertToViewportRectangle([box.x, box.y, box.x + box.w, box.y + box.h]);
+  if (!h) { h = document.createElementNS('http://www.w3.org/2000/svg', 'rect'); h.setAttribute('class', 'hov'); svg.appendChild(h); }
+  h.setAttribute('x', Math.min(x1, x2)); h.setAttribute('y', Math.min(y1, y2)); h.setAttribute('width', Math.abs(x2 - x1)); h.setAttribute('height', Math.abs(y2 - y1));
+  h.setAttribute('fill', '#14808a'); h.setAttribute('fill-opacity', '.08'); h.setAttribute('stroke', '#14808a'); h.setAttribute('stroke-dasharray', '3 2');
+});
 function pdfPoint(e) {
   const svg = e.target.closest('svg.ov'); if (!svg) return null;
   const uid = svg.dataset.uid, vp = vps[uid], r = svg.getBoundingClientRect();
@@ -197,11 +301,16 @@ function pdfPoint(e) {
   return { uid, x, y };
 }
 const addAnn = (uid, a) => { snap(); a.id = 'a' + (++aidN); (annots[uid] = annots[uid] || []).push(a); drawOverlay(uid); };
-let draft = null;
+let draft = null, insPng = null, insSize = null;
 $('#pdfPages').addEventListener('pointerdown', e => {
-  if (tool === 'none' || e.target.closest('.pf')) return; const pt = pdfPoint(e); if (!pt) return; e.preventDefault();
-  if (tool === 'hl' || tool === 'redact' || tool === 'field') draft = { t: tool, uid: pt.uid, x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
-  else if (tool === 'ink') draft = { t: 'ink', uid: pt.uid, pts: [[pt.x, pt.y]] };
+  if (tool === 'none' || e.target.closest('.pf') || e.target.closest('.pedit')) return; const pt = pdfPoint(e); if (!pt) return; e.preventDefault();
+  if (tool === 'edit') { startEdit(pt); return; }
+  if (['hl', 'ul', 'st', 'rect', 'redact', 'field'].includes(tool)) draft = { t: tool, uid: pt.uid, x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y };
+  else if (tool === 'image') {
+    if (!insPng) { say('Choose an image first.'); return; }
+    const w = Math.min(220, insSize.w), h = w * insSize.h / insSize.w;
+    addAnn(pt.uid, { t: 'img', x: pt.x - w / 2, y: pt.y - h / 2, w, h, png: insPng });
+  } else if (tool === 'ink') draft = { t: 'ink', uid: pt.uid, pts: [[pt.x, pt.y]] };
   else if (tool === 'text') {
     const txt = $('#annText').value.trim(); if (!txt) { $('#annText').focus(); say('Type the text first, then click on the page.'); return; }
     addAnn(pt.uid, { t: 'text', x: pt.x, y: pt.y, s: +$('#annSize').value || 12, txt });
@@ -220,7 +329,7 @@ $('#pdfPages').addEventListener('pointermove', e => {
 $('#pdfPages').addEventListener('pointerup', () => {
   if (!draft) return; const d = draft; draft = null;
   const box = { x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w: Math.abs(d.x1 - d.x0), h: Math.abs(d.y1 - d.y0) };
-  if ((d.t === 'hl' || d.t === 'redact') && box.w > 3 && box.h > 3) addAnn(d.uid, { t: d.t, ...box });
+  if (['hl', 'ul', 'st', 'rect', 'redact'].includes(d.t) && box.w > 3 && (box.h > 3 || d.t === 'ul' || d.t === 'st')) addAnn(d.uid, { t: d.t, ...box });
   else if (d.t === 'field' && box.w > 6 && box.h > 6) {
     const ft = $('#nfType').value, used = new Set([...fields.map(f => f.name), ...Object.values(annots).flat().filter(a => a.t === 'newfield').map(a => a.name)]);
     let name = ($('#nfName').value.trim() || 'field').replace(/[^\w\-]+/g, '_'), n = name, k = 2; while (used.has(n)) n = name + '_' + k++;
@@ -349,6 +458,7 @@ $('#ocrBtn').onclick = async () => {
 
 /* ---------- build and save ---------- */
 const base = () => fileName.replace(/\.pdf$/i, '').replace(/[^\w\- ]+/g, '').trim() || 'document';
+const redsOf = uid => { const perm = $('#pEditPerm') && $('#pEditPerm').checked; return (annots[uid] || []).filter(a => a.t === 'redact' || (perm && a.t === 'edit')).map(a => a.t === 'edit' ? editBox(a) : a); };
 async function rasterize(srcDoc, idx, reds) {
   const page = await srcDoc.getPage(idx + 1), vp = page.getViewport({ scale: 200 / 72, rotation: 0 });
   const c = document.createElement('canvas'); c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height); const ctx = c.getContext('2d');
@@ -362,7 +472,7 @@ async function rasterize(srcDoc, idx, reds) {
 async function build(list) {
   const { PDFDocument, StandardFonts, rgb, degrees } = PDFLib;
   const loaded = await Promise.all(srcs.map(s => PDFDocument.load(s.bytes, { ignoreEncryption: true })));
-  const anyRedact = list.some(p => (annots[p.uid] || []).some(a => a.t === 'redact'));
+  const anyRedact = list.some(p => redsOf(p.uid).length);
   const identity = !anyRedact && list.length === srcs[0].doc.numPages && list.every((p, i) => p.src === 0 && p.idx === i);
   if (fields.length) {
     const form = loaded[0].getForm();
@@ -386,7 +496,7 @@ async function build(list) {
   else {
     out = await PDFDocument.create(); outPages = [];
     for (const p of list) {
-      const reds = (annots[p.uid] || []).filter(a => a.t === 'redact');
+      const reds = redsOf(p.uid);
       if (reds.length) {
         const srcDoc = p.src === 0 ? flatDoc0 : srcs[p.src].doc, r = await rasterize(srcDoc, p.idx, reds);
         const srcPage = loaded[p.src].getPage(p.idx), pg = out.addPage([r.w, r.h]);
@@ -398,12 +508,21 @@ async function build(list) {
     }
   }
   const font = await out.embedFont(StandardFonts.Helvetica), fontB = await out.embedFont(StandardFonts.HelveticaBold), imgs = {};
-  const newFields = [];
+  const newFields = [], efonts = {};
+  const efont = async a => { const k = (a.fam || 'sans') + (a.bold ? 'B' : '') + (a.italic ? 'I' : ''); if (!efonts[k]) { const F = StandardFonts, m = { sans: [F.Helvetica, F.HelveticaBold, F.HelveticaOblique, F.HelveticaBoldOblique], serif: [F.TimesRoman, F.TimesRomanBold, F.TimesRomanItalic, F.TimesRomanBoldItalic], mono: [F.Courier, F.CourierBold, F.CourierOblique, F.CourierBoldOblique] }[a.fam || 'sans']; efonts[k] = await out.embedFont(m[(a.bold ? 1 : 0) + (a.italic ? 2 : 0)]); } return efonts[k]; };
+  const hexRgb = h => { const n = parseInt(h.slice(1), 16); return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255); };
+  const safeText = (f, t) => [...t.replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u2013\u2014]/g, '-').replace(/\u00a0/g, ' ')].map(ch => { try { f.encodeText(ch); return ch; } catch (e) { return '?'; } }).join('');
   for (let i = 0; i < list.length; i++) {
     const p = list[i], pg = outPages[i];
     if (p.rot) pg.setRotation(degrees((pg.getRotation().angle + p.rot) % 360));
     for (const a of annots[p.uid] || []) {
       if (a.t === 'hl') pg.drawRectangle({ x: a.x, y: a.y, width: a.w, height: a.h, color: rgb(1, 0.84, 0.2), opacity: 0.35 });
+      else if (a.t === 'ul' || a.t === 'st') { const yy = a.t === 'ul' ? a.y : a.y + a.h / 2; pg.drawLine({ start: { x: a.x, y: yy }, end: { x: a.x + a.w, y: yy }, thickness: 1.2, color: rgb(0.8, 0.07, 0.07) }); }
+      else if (a.t === 'rect') pg.drawRectangle({ x: a.x, y: a.y, width: a.w, height: a.h, borderColor: rgb(0.04, 0.36, 0.39), borderWidth: 1.4 });
+      else if (a.t === 'edit') {
+        const eb = editBox(a), f = await efont(a); pg.drawRectangle({ x: eb.x, y: eb.y, width: eb.w, height: eb.h, color: hexRgb(a.bg), borderWidth: 0 });
+        const t = safeText(f, a.txt); if (t) pg.drawText(t, { x: a.x, y: a.by, size: a.size, font: f, color: hexRgb(a.fg) });
+      }
       else if (a.t === 'ink') for (let k = 1; k < a.pts.length; k++) pg.drawLine({ start: { x: a.pts[k - 1][0], y: a.pts[k - 1][1] }, end: { x: a.pts[k][0], y: a.pts[k][1] }, thickness: 1.6, color: rgb(0.04, 0.36, 0.39) });
       else if (a.t === 'text') pg.drawText(a.txt, { x: a.x, y: a.y, size: a.s, font, color: rgb(0.07, 0.07, 0.07) });
       else if (a.t === 'img') { imgs[a.png] = imgs[a.png] || await out.embedPng(a.png); pg.drawImage(imgs[a.png], { x: a.x, y: a.y, width: a.w, height: a.h }); }
@@ -433,6 +552,7 @@ async function build(list) {
     }
   }
   if (anyRedact) { out.setTitle(''); out.setAuthor(''); out.setSubject(''); out.setKeywords([]); out.setCreator(''); }
+  if (!anyRedact || $('#infoTitle').value || $('#infoAuthor').value || $('#infoSubject').value) { if ($('#infoTitle').value) out.setTitle($('#infoTitle').value); if ($('#infoAuthor').value) out.setAuthor($('#infoAuthor').value); if ($('#infoSubject').value) out.setSubject($('#infoSubject').value); }
   out.setProducer('Leaf Viewer (open source)');
   let bytes = await out.save({ useObjectStreams: true });
   const pw = $('#pwSet').value;
@@ -443,11 +563,45 @@ async function build(list) {
   }
   return bytes;
 }
+
+/* ---------- convert + insert image ---------- */
+$('#imgPick').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return; const url = URL.createObjectURL(f);
+  const im = new Image(); im.src = url; try { await im.decode(); } catch (x) { say('That image could not be read.'); return; }
+  const c = document.createElement('canvas'), m = Math.min(1, 1600 / Math.max(im.width, im.height)); c.width = Math.round(im.width * m); c.height = Math.round(im.height * m);
+  c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+  insPng = c.toDataURL('image/png'); insSize = { w: c.width, h: c.height }; $('#imgName').textContent = f.name; setTool('image'); e.target.value = '';
+};
+$('#exportPng').onclick = async () => {
+  try {
+    busy('Rendering pages…'); const entries = [];
+    for (let i = 0; i < pages.length; i++) {
+      const p = pages[i], page = await pdfPage(p), vp = page.getViewport({ scale: 150 / 72, rotation: (page.rotate + p.rot) % 360 });
+      const c = document.createElement('canvas'); c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      const buf = await new Promise(r => c.toBlob(b => b.arrayBuffer().then(r), 'image/png'));
+      entries.push({ name: base() + '-page-' + String(i + 1).padStart(2, '0') + '.png', data: new Uint8Array(buf) });
+    }
+    busy(''); if (entries.length === 1) await saveBytes(entries[0].data, entries[0].name); else await saveBytes(Leaf.zipWrite(entries), base() + '-images.zip');
+  } catch (err) { busy(''); say('Could not export images: ' + err.message); }
+};
+$('#extractTxt').onclick = async () => {
+  try {
+    busy('Reading text…'); let out = '';
+    for (let i = 0; i < pages.length; i++) {
+      const tc = await (await pdfPage(pages[i])).getTextContent();
+      out += (i ? '\n\n' : '') + tc.items.map(it => it.str + (it.hasEOL ? '\n' : '')).join('');
+    }
+    busy(''); if (!out.trim()) { say('No text found. If this is a scan, use “Make text searchable” first.'); return; }
+    await saveBytes(new TextEncoder().encode(out), base() + '.txt');
+  } catch (err) { busy(''); say('Could not extract text: ' + err.message); }
+};
+const TABTOOL = { pedit: 'edit', predact: 'redact', pfield: 'none' };
 async function saveBytes(bytes, name) { await window.LeafApp.offer(name, bytes); }
 $('#savePdfBtn').onclick = async () => {
   try { busy('Building your PDF…'); const bytes = await build(pages); busy(''); await saveBytes(bytes, base() + '-edited.pdf'); }
   catch (err) { busy(''); say('Could not build the PDF: ' + err.message); }
 };
 
-window.PDFWS = { open, build: () => build(pages), state: () => ({ pages, annots, values, fields, stamps }) };
+window.PDFWS = { onTab: t => { closeEditor(true); if (t in TABTOOL) setTool(TABTOOL[t]); else if (tool === 'edit' || tool === 'redact') setTool('none'); }, open, build: () => build(pages), state: () => ({ pages, annots, values, fields, stamps }) };
 }
