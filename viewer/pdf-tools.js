@@ -465,9 +465,9 @@ $('#pdfThumbs').addEventListener('click', e => {
   renderAll();
 });
 $('#addPdf').onchange = async e => {
-  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-  try { let b = new Uint8Array(await f.arrayBuffer()); b = await unlockIfNeeded(b, f.name); if (!b) return; snap(); const n = await addSource(b, f.name); renderAll(); say('Added ' + n + ' pages from ' + f.name + ' at the end.'); }
-  catch (err) { say('Could not add that file: ' + err.message); }
+  const f = e.target.files[0]; if (!f) { e.target.value = ''; return; }
+  try { let b = await (window.readBytes ? window.readBytes(f) : f.arrayBuffer().then(x => new Uint8Array(x))); e.target.value = ''; b = await unlockIfNeeded(b, f.name); if (!b) return; snap(); const n = await addSource(b, f.name); renderAll(); say('Added ' + n + ' pages from ' + f.name + ' at the end.'); }
+  catch (err) { e.target.value = ''; say('Could not add that file: ' + err.message); }
 };
 $('#selAll').onclick = () => { const all = pages.every(p => p.sel); pages.forEach(p => p.sel = !all); renderAll(); };
 $('#extractBtn').onclick = async () => {
@@ -755,7 +755,7 @@ $('#blankPg').onclick = async () => {
   } catch (err) { say('Could not add a blank page: ' + err.message); }
 };
 $('#imgToPdf').onchange = async e => {
-  const files = [...e.target.files]; e.target.value = ''; if (!files.length) return;
+  const files = [...e.target.files]; if (!files.length) { e.target.value = ''; return; }
   try {
     snap();
     for (const f of files) {
@@ -765,8 +765,8 @@ $('#imgToPdf').onchange = async e => {
       const bytes = await newPdfSource(async d => { const img = await d.embedPng(png), pg = d.addPage([im.width * sc, im.height * sc]); pg.drawImage(img, { x: 0, y: 0, width: im.width * sc, height: im.height * sc }); }, f.name);
       await addSource(bytes, f.name);
     }
-    renderAll(); say('Added ' + files.length + (files.length === 1 ? ' image' : ' images') + ' as pages at the end.');
-  } catch (err) { say('Could not add the image: ' + err.message); }
+    e.target.value = ''; renderAll(); say('Added ' + files.length + (files.length === 1 ? ' image' : ' images') + ' as pages at the end.');
+  } catch (err) { e.target.value = ''; say('Could not add the image: ' + err.message); }
 };
 $('#cropApply').onclick = () => {
   const m = { l: +$('#cropL').value || 0, r: +$('#cropR').value || 0, t: +$('#cropT').value || 0, b: +$('#cropB').value || 0 }, sel = pages.filter(p => p.sel), tgt = sel.length ? sel : pages; snap();
